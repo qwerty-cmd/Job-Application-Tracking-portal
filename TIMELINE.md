@@ -62,38 +62,14 @@
 
 ---
 
-## Data Model (Cosmos DB)
-
-**Container:** `applications` | **Partition Key:** `/id`
-
-```json
-{
-  "id": "uuid",
-  "company": "Contoso Ltd",
-  "role": "Senior Cloud Engineer",
-  "dateApplied": "2026-03-15",
-  "outcome": "Interview Scheduled",
-  "resume": {
-    "blobUrl": "https://<storage>.blob.core.windows.net/resumes/contoso-resume.pdf",
-    "fileName": "contoso-resume.pdf",
-    "uploadedAt": "2026-03-15T10:30:00Z"
-  },
-  "coverLetter": {
-    "blobUrl": "https://<storage>.blob.core.windows.net/coverletters/contoso-cl.pdf",
-    "fileName": "contoso-cl.pdf",
-    "uploadedAt": "2026-03-15T10:30:05Z"
-  },
-  "createdAt": "2026-03-15T10:30:00Z",
-  "updatedAt": "2026-03-15T10:30:05Z"
-}
-```
+> **Note:** For the authoritative data model, API contract, and project structure, see `CLAUDE.md`. This file is for effort planning and timeline tracking only.
 
 ---
 
 ## Event Streaming Flow
 
 ```
-User uploads resume PDF
+User uploads file (resume, cover letter, or JD)
         │
         ▼
 Frontend → Azure Function (gets SAS token) → Direct upload to Blob Storage
@@ -105,36 +81,7 @@ Blob Storage fires "BlobCreated" event → Azure Event Grid
 Event Grid triggers Azure Function ("processUpload")
         │
         ▼
-Function updates Cosmos DB record with blob URL, file size, timestamp
-```
-
----
-
-## Repo Structure
-
-```
-job-tracker/
-├── .github/
-│   └── workflows/
-│       └── azure-static-web-apps.yml
-├── infra/
-│   ├── main.bicep
-│   └── parameters.json
-├── api/
-│   ├── functions/
-│   │   ├── getApplications.ts
-│   │   ├── createApplication.ts
-│   │   ├── updateApplication.ts
-│   │   ├── deleteApplication.ts
-│   │   ├── getUploadSasToken.ts
-│   │   └── processUpload.ts
-│   ├── package.json
-│   └── host.json
-├── client/
-│   ├── src/
-│   ├── public/
-│   └── package.json
-└── README.md
+Function updates Cosmos DB record with blob URL, file name, timestamp
 ```
 
 ---
@@ -184,18 +131,20 @@ job-tracker/
 
 ## Phase 2: Backend API — CRUD (Azure Functions)
 
-**Effort: 6–7 hrs | Calendar: Week 2**
+**Effort: 8–9 hrs | Calendar: Week 2**
 
-| Task                                                  | Effort  | Notes                                              |
-| ----------------------------------------------------- | ------- | -------------------------------------------------- |
-| Scaffold Azure Functions project (Node.js/TypeScript) | 0.5 hrs | `func init`, project structure                     |
-| Cosmos DB SDK client (singleton pattern)              | 1 hr    | Connection, error handling, retry config           |
-| `createApplication` function (POST)                   | 1 hr    | Input validation, generate ID, write to Cosmos     |
-| `getApplications` function (GET all + GET by ID)      | 1 hr    | Query with pagination, point read                  |
-| `updateApplication` function (PATCH)                  | 0.5 hrs | Partial update                                     |
-| `deleteApplication` function (DELETE)                 | 0.5 hrs |                                                    |
-| `getUploadSasToken` function (POST)                   | 1 hr    | Generate scoped SAS token, validate file type/size |
-| Local testing with Functions Core Tools               | 1.5 hrs | End-to-end local validation                        |
+| Task                                                  | Effort  | Notes                                                             |
+| ----------------------------------------------------- | ------- | ----------------------------------------------------------------- |
+| Scaffold Azure Functions project (Node.js/TypeScript) | 0.5 hrs | `func init`, project structure                                    |
+| Cosmos DB SDK client (singleton pattern)              | 1 hr    | Connection, error handling, retry config                          |
+| `createApplication` function (POST)                   | 1 hr    | Input validation, generate ID, write to Cosmos                    |
+| `getApplications` function (GET all + GET by ID)      | 1 hr    | Query with pagination, point read                                 |
+| `updateApplication` function (PATCH)                  | 0.5 hrs | Partial update, rejection validation                              |
+| `deleteApplication` + `restoreApplication` functions  | 0.5 hrs | Soft delete + undelete                                            |
+| `getUploadSasToken` + `getDownloadSasToken` functions | 1.5 hrs | Generate scoped SAS tokens for upload (write) and download (read) |
+| Interview CRUD functions (add/update/delete/reorder)  | 1.5 hrs | Nested interview management within application                    |
+| Dashboard stats endpoint                              | 1 hr    | Aggregate counts by status and interview type                     |
+| Local testing with Functions Core Tools               | 1.5 hrs | End-to-end local validation                                       |
 
 ---
 
@@ -215,20 +164,21 @@ job-tracker/
 
 ## Phase 4: Frontend (React + TypeScript)
 
-**Effort: 10–12 hrs | Calendar: Week 2–3**
+**Effort: 13–15 hrs | Calendar: Week 2–3**
 
-| Task                                           | Effort  | Notes                                      |
-| ---------------------------------------------- | ------- | ------------------------------------------ |
-| Scaffold React app (Vite + TypeScript)         | 0.5 hrs |                                            |
-| Set up Tailwind CSS or Material UI             | 0.5 hrs |                                            |
-| API service layer (axios/fetch wrapper, types) | 1 hr    |                                            |
-| Dashboard page — table with all applications   | 2 hrs   | Sort, filter by outcome/date               |
-| Add Application page — form with all fields    | 1.5 hrs | Company, role, date, outcome + file upload |
-| File upload component — drag & drop            | 2 hrs   | Get SAS token → upload to Blob → progress  |
-| Edit Application page                          | 1.5 hrs | Pre-populated form, file replacement       |
-| Application Detail page                        | 1 hr    | View info + download files                 |
-| Navigation, layout, routing                    | 1 hr    | React Router                               |
-| Responsive design + loading/error states       | 1.5 hrs |                                            |
+| Task                                           | Effort  | Notes                                                             |
+| ---------------------------------------------- | ------- | ----------------------------------------------------------------- |
+| Scaffold React app (Vite + TypeScript)         | 0.5 hrs |                                                                   |
+| Set up Tailwind CSS or Material UI             | 0.5 hrs |                                                                   |
+| API service layer (axios/fetch wrapper, types) | 1 hr    |                                                                   |
+| Dashboard page — table with all applications   | 2 hrs   | Sort, filter by outcome/date                                      |
+| Add Application page — form with all fields    | 2 hrs   | Company, role, location, date, status, JD text/URL + file uploads |
+| File upload component — drag & drop            | 2 hrs   | Get SAS token → upload to Blob → progress                         |
+| Edit Application page                          | 1.5 hrs | Pre-populated form, file replacement                              |
+| Application Detail page                        | 1.5 hrs | View all info, download files, interview list                     |
+| Interview round management (add/edit/reorder)  | 2 hrs   | Nested UI within application detail                               |
+| Navigation, layout, routing                    | 1 hr    | React Router                                                      |
+| Responsive design + loading/error states       | 1.5 hrs |                                                                   |
 
 ---
 
@@ -266,14 +216,14 @@ job-tracker/
 | ------------------------------ | -------------- | -------------------------- |
 | **0 — Architecture & Design**  | 8              | Week 1                     |
 | **1 — Infrastructure (Bicep)** | 5–6            | Week 1                     |
-| **2 — Backend API**            | 6–7            | Week 2                     |
+| **2 — Backend API**            | 8–9            | Week 2                     |
 | **3 — Event Streaming**        | 5–6            | Week 2                     |
-| **4 — Frontend**               | 10–12          | Week 2–3                   |
-| **5 — CI/CD & Deploy**         | 3–4            | Week 3                     |
-| **6 — Polish & Showcase**      | 7–8            | Week 3–4                   |
-| **Total**                      | **~48–55 hrs** | **~3–4 weeks**             |
+| **4 — Frontend**               | 13–15          | Week 2–4                   |
+| **5 — CI/CD & Deploy**         | 3–4            | Week 4                     |
+| **6 — Polish & Showcase**      | 7–8            | Week 4–5                   |
+| **Total**                      | **~53–62 hrs** | **~4–5 weeks**             |
 
-> **If working full-time (~40 hrs/week): ~1.5 weeks**
+> **If working full-time (~40 hrs/week): ~1.5–2 weeks**
 
 ---
 
@@ -282,8 +232,9 @@ job-tracker/
 ```
 Week 1  ████████████████░░░░  Phase 0 (Design) + Phase 1 (Bicep)
 Week 2  ████████████████░░░░  Phase 2 (API) + Phase 3 (Events) + Phase 4 start
-Week 3  ████████████████░░░░  Phase 4 finish + Phase 5 (Deploy)
-Week 4  ██████████░░░░░░░░░░  Phase 6 (Polish & Showcase-Ready)
+Week 3  ████████████████░░░░  Phase 4 continued (Frontend)
+Week 4  ████████████████░░░░  Phase 4 finish + Phase 5 (Deploy)
+Week 5  ██████████░░░░░░░░░░  Phase 6 (Polish & Showcase-Ready)
 ```
 
 ---
