@@ -326,15 +326,9 @@ resource staticWebApp 'Microsoft.Web/staticSites@2023-01-01' = {
   properties: {}
 }
 
-// Link Function App as SWA API backend
-resource swaLinkedBackend 'Microsoft.Web/staticSites/linkedBackends@2023-01-01' = {
-  parent: staticWebApp
-  name: 'backend'
-  properties: {
-    backendResourceId: functionApp.id
-    region: location
-  }
-}
+// Note: SWA Free tier does not support linkedBackends (Standard tier only).
+// Auth is enforced inside each Function via x-ms-client-principal header.
+// See api/shared/auth.ts — requireOwner() helper used by all Function handlers.
 
 // ============================================================================
 // Event Grid

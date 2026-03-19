@@ -17,14 +17,14 @@ Auth:      Azure SWA built-in (GitHub provider)
 ## Current Status
 
 - [x] Phase 0: Architecture & Design — **complete**
-- [ ] Phase 1: Infrastructure (Bicep) — **in progress (Bicep templates created, pending deployment)**
+- [x] Phase 1: Infrastructure (Bicep) — **complete (deployed to Azure, all 16 resources live)**
 - [ ] Phase 2: Backend API (CRUD Functions)
 - [ ] Phase 3: Event Streaming Pipeline
 - [ ] Phase 4: Frontend (React)
 - [ ] Phase 5: CI/CD & Deployment
 - [ ] Phase 6: Polish & Showcase-Ready
 
-**Currently working on:** Phase 1 — Bicep templates written and validated; next step is deploying infrastructure and verifying outputs.
+**Currently working on:** Phase 2 — Backend API (Azure Functions CRUD + file upload/download endpoints).
 
 ## Design Steps Tracker
 
@@ -46,10 +46,11 @@ Auth:      Azure SWA built-in (GitHub provider)
 - SAS token expiry: 5 minutes
 - SAS token scope: single blob, create+write only (no read/delete)
 - Auth: Azure SWA built-in GitHub provider (restrict to personal account)
-- App access model: private app; all frontend routes and `/api/*` require a custom `owner` role (not just `authenticated`)
+- App access model: private app; all frontend routes require a custom `owner` role (not just `authenticated`); API access enforced at the Function level
 - Authorization roles: SWA built-in roles (`anonymous`, `authenticated`) plus custom `owner`; only the personal GitHub account is assigned `owner`
-- AuthN/AuthZ enforcement point: Azure Static Web Apps gateway enforces route authorization and returns 401/403 before requests reach Azure Functions
-- API identity mechanism: SWA-managed auth session and client principal (`x-ms-client-principal`) for API context; no custom JWT issuance/validation flow in v1
+- SWA linked backend not used — SWA Free tier does not support linking external Function Apps; frontend calls Function App URL directly
+- AuthN/AuthZ enforcement point: Azure Functions enforce authorization by reading and validating the `x-ms-client-principal` header on every request; SWA Free tier cannot enforce `/api/*` route rules against an external Function App
+- API identity mechanism: SWA-managed auth session and client principal (`x-ms-client-principal`) for API context; Functions validate this header and check for `owner` role; no custom JWT issuance/validation flow in v1
 - API keys are not used for browser-to-API authentication in this app
 - Rate limiting strategy (v1): no API Management; rely on private owner-only access plus targeted in-function defensive throttling for sensitive endpoints (especially SAS token issuance/download)
 - Cosmos DB client: singleton pattern in `api/shared/cosmosClient.ts`
@@ -77,7 +78,7 @@ Auth:      Azure SWA built-in (GitHub provider)
 - Event destination: Azure Function Event Grid trigger binding for `processUpload` (not manual HTTP webhook validation)
 - Dead-lettering enabled on the Event Grid subscription, writing undelivered events to a dedicated Blob Storage container for inspection/replay
 - Event Grid retry policy uses the service defaults: up to 30 delivery attempts and 24-hour TTL; undeliverable events are dead-lettered after retry exhaustion
-- IaC deployment topology: Azure Static Web Apps + separate Azure Functions app (Consumption) + Cosmos DB + Storage + Event Grid system topic/subscription, all provisioned via Bicep
+- IaC deployment topology: Azure Static Web Apps (no linked backend) + separate Azure Functions app (Consumption) + Cosmos DB + Storage + Event Grid system topic/subscription, all provisioned via Bicep
 - Bicep structure: `infra/main.bicep` as entrypoint with modular resources and `infra/parameters.json` for environment-specific values
 - Storage containers managed by IaC: `resumes`, `coverletters`, `jobdescriptions`, and `deadletter`
 - Event Grid subscription configuration in IaC includes BlobCreated-only filtering and dead-letter destination wiring
@@ -150,17 +151,17 @@ Auth:      Azure SWA built-in (GitHub provider)
 ### Step 6 — Why This Authentication & Security Model?
 
 - **Use SWA built-in GitHub provider:** This app is personal and Azure-only. Built-in auth avoids custom identity plumbing and reduces the risk of security mistakes.
-- **Private app with `owner` role (not `authenticated`):** `authenticated` allows any signed-in user from enabled providers. Restricting routes to `owner` ensures only the intended personal account can access the app and APIs.
-- **Gateway-enforced authorization over function-level auth middleware:** SWA handles 401/403 before Functions execute, reducing backend code complexity and giving a consistent access boundary.
-- **SWA session/client principal over API keys:** Browser API keys are not secret and are poor for user-level auth. SWA-managed auth context is safer and aligns with route-based authorization.
+- **Private app with `owner` role (not `authenticated`):** `authenticated` allows any signed-in user from enabled providers. Restricting routes to `owner` ensures only the intended personal account can access the frontend. Functions enforce the same check server-side.
+- **Function-level auth over SWA gateway enforcement:** SWA Free tier does not support linked backends, so the SWA gateway cannot enforce `/api/*` route rules. Each Function validates the `x-ms-client-principal` header and checks for the `owner` role — the security outcome is identical, with ~10 lines of shared auth helper code. This avoids paying for SWA Standard (~$9/month) for a single-user portfolio app.
+- **SWA session/client principal over API keys:** Browser API keys are not secret and are poor for user-level auth. SWA-managed auth context is safer, and the `x-ms-client-principal` header is available to Functions for role validation.
 - **No custom JWT flow in v1:** SWA already manages authentication state. Adding custom JWT issuance/verification would duplicate platform features with little benefit for a single-user app.
 - **Rate limiting without APIM in v1:** API Management adds unnecessary cost/complexity for a private personal app. Targeted throttling on sensitive endpoints provides practical protection while keeping architecture lean.
-- **Defence in depth remains in Functions:** Even with gateway auth, backend handlers still validate payloads, file metadata, and business rules to prevent logic abuse.
+- **Defence in depth remains in Functions:** Backend handlers validate payloads, file metadata, auth headers, and business rules — the Function is the primary enforcement boundary given no gateway link.
 
 ### Step 7 — Why This Infrastructure & Deployment Plan?
 
 - **Keep all core infrastructure in Bicep:** Infrastructure as code makes provisioning repeatable, reviewable, and less error-prone than portal-first setup.
-- **Separate SWA and Functions resources:** SWA handles frontend/auth edge concerns while a dedicated Function app handles API/event workloads with clearer operational boundaries.
+- **Separate SWA and Functions resources (no linked backend):** SWA handles frontend/auth edge concerns; a dedicated Function app handles API/event workloads. SWA Free tier does not support linked backends, so the Function App is standalone. The `swaLinkedBackend` resource was removed from Bicep — it caused a deployment failure (`SkuCode 'Free' is invalid`).
 - **Provision upload and reliability primitives up front:** Blob containers and Event Grid dead-letter storage are part of baseline infrastructure, not afterthoughts.
 - **Use parameterized deployments:** `infra/parameters.json` keeps environment values out of templates and allows safe repeat deployments across environments.
 - **Define deterministic deployment outputs:** Exposing endpoints/names from IaC reduces manual lookup errors during app configuration and smoke testing.
@@ -179,7 +180,7 @@ Auth:      Azure SWA built-in (GitHub provider)
 - **Separate `GET /api/applications/deleted` endpoint (not a query param):** The main list always excludes deleted records — no risk of accidentally surfacing them. The deleted endpoint is an explicit, separate screen (undo/recently deleted view). Restore is already handled by `PATCH /:id/restore`.
 - **`DELETE /api/applications/:id/files/:fileType` for individual file removal:** Reads the current `blobUrl` for that `fileType` from Cosmos, deletes the blob from storage, then nulls out that field in the Cosmos record. Allows removing a file without deleting the whole application.
 - **Stats always exclude soft-deleted applications:** Deleted apps are logically gone from the user's perspective. Including them in counts would pollute the dashboard with data the user has chosen to discard.
-- **401/403 handled by Azure SWA gateway, not by Functions:** SWA enforces authentication and role-based access before requests reach the Functions. 401 = no valid session, 403 = authenticated but missing required `owner` role. Functions never need to implement primary auth checks — they can trust that any request they receive passed the SWA access rules.
+- **401/403 enforced by Functions via `x-ms-client-principal` header:** SWA Free tier cannot enforce API route rules without a linked backend. Each Function reads the `x-ms-client-principal` header, decodes it, and checks for the `owner` role. 401 = header absent or no valid session, 403 = authenticated but missing `owner` role. A shared `requireOwner(req)` helper in `api/shared/auth.ts` handles this for all Functions.
 - **File re-upload overwrites via processUpload + lifecycle policy safety net:** Client SAS tokens are create+write only — deletion is never in the client's hands. `processUpload` handles old blob deletion using its storage connection string (full access). Cosmos is updated before the delete so the record stays consistent if the delete fails. A 90-day lifecycle policy on the storage account catches any blobs that escape deletion. Lifecycle management is free; the delete transactions it triggers are negligible cost for a single-user app.
 
 ## v1 Requirements (Baseline)
@@ -322,8 +323,8 @@ Statuses: `Applying → Application Submitted → Recruiter Screening → Interv
 | 200  | OK                     | Successful GET, PATCH, DELETE                                                 |
 | 201  | Created                | Successful POST                                                               |
 | 400  | Bad Request            | Validation failed (missing fields, invalid enum)                              |
-| 401  | Unauthorized           | No valid session — returned by Azure SWA gateway, never reaches the Functions |
-| 403  | Forbidden              | Authenticated but not the allowed GitHub account — returned by SWA gateway    |
+| 401  | Unauthorized           | No valid session — `x-ms-client-principal` header absent or invalid, returned by Function auth guard |
+| 403  | Forbidden              | Authenticated but missing `owner` role — returned by Function auth guard      |
 | 404  | Not Found              | Application/interview ID doesn't exist or is soft-deleted                     |
 | 413  | Payload Too Large      | File exceeds 10 MB                                                            |
 | 415  | Unsupported Media Type | File type not PDF/DOCX/HTML                                                   |
@@ -914,9 +915,11 @@ job-tracker/
 - 2026-03-18: Added design rationale (why decisions were made for Steps 1–3), expanded API contract with full request/response examples, synced TIMELINE.md with current scope, removed stale data from TIMELINE.md
 - 2026-03-19: Reviewed and completed Step 3 (API contract) — resolved gaps: file replacement/overwrite behaviour, deleted app listing endpoint, individual file delete endpoint, stats exclusion of deleted apps, 401/403 via SWA gateway. Completed Step 4 (File Upload Architecture) — CORS, blob PUT headers, client-side validation, SAS issuance validation, processUpload fileType derivation, upload completion polling, failure handling, progress bar, concurrent uploads.
 - 2026-03-19: Completed Step 5 (Event-Driven Pipeline) — chose Blob Storage system topic, single Event Grid subscription, Event Grid Schema, Event Grid trigger binding, BlobCreated-only filtering, dead-letter container, and default retry policy with idempotent processUpload expectations.
-- 2026-03-19: Completed Step 6 (Authentication & Security) — locked SWA built-in GitHub auth, private owner-only route access, SWA gateway as auth enforcement boundary, no browser API keys or custom JWT flow in v1, and pragmatic in-function throttling for sensitive API endpoints without adding APIM.
+- 2026-03-19: Completed Step 6 (Authentication & Security) — locked SWA built-in GitHub auth, private owner-only route access, no browser API keys or custom JWT flow in v1, and pragmatic in-function throttling for sensitive API endpoints without adding APIM.
 - 2026-03-19: Planned Step 7 (Infrastructure & Deployment) — locked IaC topology/resources, Bicep structure and outputs, deployment sequencing expectations, and explicitly gated Phase 1 execution pending planning-doc review.
-- 2026-03-19: Phase 1 started — created `infra/main.bicep` and `infra/parameters.json` with all resources: Cosmos DB (free tier, jobtracker/applications, /id partition key, 400 RU/s), Storage Account (LRS, 4 blob containers, CORS for SWA origin, 90-day lifecycle policy), Log Analytics + App Insights, Azure Functions (Consumption, Linux, Node.js 20), Static Web Apps (free tier) with linked backend, Event Grid system topic (subscription conditional on processUpload deployment). Bicep validated successfully.
+- 2026-03-19: Phase 1 started — created `infra/main.bicep` and `infra/parameters.json` with all resources: Cosmos DB (free tier, jobtracker/applications, /id partition key, 400 RU/s), Storage Account (LRS, 4 blob containers, CORS for SWA origin, 90-day lifecycle policy), Log Analytics + App Insights, Azure Functions (Consumption, Linux, Node.js 20), Static Web Apps (free tier), Event Grid system topic (subscription conditional on processUpload deployment). Bicep validated successfully.
+- 2026-03-19: Architecture decision — removed SWA linked backend. SWA Free tier does not support linking external Function Apps (`SkuCode 'Free' is invalid` error on deploy). Auth enforcement moved from SWA gateway to a shared `requireOwner()` helper in each Function, validating the `x-ms-client-principal` header. Updated CLAUDE.md and DEVLOG.md. Bicep updated to remove `swaLinkedBackend` resource.
+- 2026-03-19: Phase 1 complete — full infrastructure deployed to Azure (16 resources). Outputs: SWA `gray-rock-0c358e300.1.azurestaticapps.net`, Function App `func-jobtracker`, Cosmos `https://cosmos-jobtracker.documents.azure.com:443/`, Storage `stjobtrackermliokt`, Event Grid topic `evgt-jobtracker`.
 
 ---
 
