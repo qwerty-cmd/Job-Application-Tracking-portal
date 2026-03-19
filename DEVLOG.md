@@ -108,3 +108,38 @@ Each entry records what was done, on which machine, with which AI tool, and what
 **Blockers:** None
 
 **Next session:** Continue Phase 0 design — Steps 4 (File Upload Architecture), 5 (Event Pipeline), 6 (Auth), 7 (Infra & Deployment). Then start Phase 1 (Bicep).
+
+---
+
+## 2026-03-19 — Home (Claude Code)
+
+**What was done:**
+
+- Cloned repo to local machine
+- Reviewed Step 3 (API Contract) and resolved gaps:
+  - File replacement behaviour → overwrite via `processUpload` + 90-day lifecycle policy safety net
+  - No deleted app listing → added `GET /api/applications/deleted`
+  - No individual file delete → added `DELETE /api/applications/:id/files/:fileType`
+  - Stats didn't explicitly exclude deleted apps → documented `isDeleted: false` filter
+  - No 401/403 in status codes → added with note that SWA gateway handles both
+- Completed Step 4 (File Upload Architecture):
+  - CORS on Blob Storage (Bicep, SWA origin only)
+  - Required blob PUT headers (`x-ms-blob-type: BlockBlob`, `Content-Type`)
+  - Client-side validation before SAS token request
+  - SAS token issuance validation (applicationId exists, fileType enum, file extension)
+  - `processUpload` fileType derivation from container name
+  - Upload completion detection via polling (`GET /:id` every 2s, max 15s)
+  - Upload failure handling (retry from scratch, no partial recovery needed)
+  - Upload progress via `XMLHttpRequest.upload.onprogress`
+  - Concurrent uploads allowed (independent SAS tokens + blob paths)
+
+**Decisions made:**
+
+- File re-upload = overwrite; Cosmos written before old blob deleted (consistency first)
+- Blob Storage lifecycle policy: 90-day TTL as safety net (free feature)
+- Polling over SignalR for upload completion (simpler, sufficient for v1)
+- XHR over fetch for upload progress (better `onprogress` support)
+
+**Blockers:** None
+
+**Next session:** Step 5 (Event-Driven Pipeline), Step 6 (Auth), Step 7 (Infra & Deployment). Then start Phase 1 (Bicep).

@@ -24,7 +24,7 @@ Auth:      Azure SWA built-in (GitHub provider)
 - [ ] Phase 5: CI/CD & Deployment
 - [ ] Phase 6: Polish & Showcase-Ready
 
-**Currently working on:** Phase 0 — Steps 1–3 complete. Added design rationale and full API contract detail to CLAUDE.md. Synced TIMELINE.md. Next: Step 4 (File Upload Architecture), Step 5 (Event Pipeline), Step 6 (Auth), Step 7 (Infra & Deployment).
+**Currently working on:** Phase 0 — Steps 1–4 complete. Next: Step 5 (Event-Driven Pipeline), Step 6 (Auth), Step 7 (Infra & Deployment).
 
 ## Design Steps Tracker
 
@@ -33,7 +33,7 @@ Auth:      Azure SWA built-in (GitHub provider)
 | 1    | User Flow & Requirements    | ✅ Done     |
 | 2    | Data Model (Cosmos DB)      | ✅ Done     |
 | 3    | API Contract                | ✅ Done     |
-| 4    | File Upload Architecture    | Not started |
+| 4    | File Upload Architecture    | ✅ Done     |
 | 5    | Event-Driven Pipeline       | Not started |
 | 6    | Authentication & Security   | Not started |
 | 7    | Infrastructure & Deployment | Not started |
@@ -53,6 +53,16 @@ Auth:      Azure SWA built-in (GitHub provider)
 - Interview rounds are reorderable (numeric `order` field)
 - Adding first interview auto-updates status to "Interview Stage"
 - File download uses a separate endpoint from upload SAS token
+- File re-upload overwrites the previous file — `processUpload` Function deletes the old blob (using storage connection string) then updates Cosmos with new file metadata; Blob Storage lifecycle policy (90-day last-modified TTL) acts as safety net for any blobs that escape deletion
+- CORS on Blob Storage: allow `PUT`, `GET`, `HEAD` from SWA origin (`https://*.azurestaticapps.net`); exposed headers: `Content-Type`, `x-ms-blob-type`; configured in Bicep on the storage account
+- Browser blob PUT requires headers: `x-ms-blob-type: BlockBlob` and `Content-Type` matching the file MIME type
+- Client-side validation runs before SAS token request: check file extension and size (max 10 MB); show inline error if invalid — avoids burning a token on a bad file
+- SAS token issuance validates: `applicationId` exists in Cosmos (404 if not), `fileType` is valid enum, `fileName` ends in allowed extension
+- `processUpload` derives `fileType` from container name in blob path: `resumes` → `resume`, `coverletters` → `coverLetter`, `jobdescriptions` → `jobDescription`
+- Upload completion detection: frontend polls `GET /:id` every 2 seconds (max 15 seconds) after PUT succeeds, until the file field is non-null; shows "processing" state if timeout reached
+- Upload failure handling: if PUT fails, frontend discards the SAS token and shows an error — user retries from scratch (requests a new token); no partial recovery needed (blob PUT is atomic under 256 MB)
+- Upload progress: v1 shows a progress bar using `XMLHttpRequest` with `upload.onprogress`
+- Concurrent uploads: allowed — resume and cover letter can be uploaded simultaneously; each has its own SAS token and independent blob path
 - Location: structured (city, country, workMode) + Other free text
 - Date applied defaults to today
 - Job description capture: URL + paste text + file upload (all optional)
@@ -85,6 +95,17 @@ Auth:      Azure SWA built-in (GitHub provider)
 - **Files stored in Blob Storage, only metadata in Cosmos:** Binary files would bloat documents and consume RUs. Cosmos stores just `blobUrl`, `fileName`, `uploadedAt` references.
 - **`blobUrl` in Cosmos but NOT returned in API GET responses:** Blob URLs with SAS tokens are generated on-demand via the download endpoint. Prevents stale/expired URLs sitting in responses.
 
+### Step 4 — Why This File Upload Architecture?
+
+- **CORS configured in Bicep (not manually):** Storage account CORS is infrastructure config — it belongs in the Bicep template so it's reproducible. Allowing only the SWA origin (not `*`) limits exposure.
+- **`x-ms-blob-type: BlockBlob` required by Azure:** Azure Blob Storage rejects PUTs without this header. Documenting it here so it's not a surprise during implementation.
+- **Client-side validation before SAS request:** Catching invalid files on the frontend avoids a round trip to the Function and wastes a 5-minute token. The Function still validates — client-side is UX only, not a security control.
+- **`applicationId` validated before issuing SAS token:** Prevents orphaned blobs for non-existent applications. A token issued for a deleted or non-existent application would result in a blob with no Cosmos record to link to.
+- **`processUpload` derives fileType from container name:** The BlobCreated event payload includes the blob URL. Parsing the container name is more reliable than embedding fileType in the blob path or filename, and requires no changes to the SAS token flow.
+- **Polling over WebSockets/SignalR for upload completion:** Event Grid → Function → Cosmos is async but fast (typically <2 seconds). Polling every 2 seconds for up to 15 seconds is simple, free, and sufficient for v1. SignalR adds a new Azure service and complexity that isn't justified.
+- **`XMLHttpRequest` for progress over fetch:** `fetch` doesn't expose upload progress natively in all browsers. `XMLHttpRequest.upload.onprogress` is well-supported and straightforward for a single PUT.
+- **Atomic blob PUT means no partial recovery needed:** Files under 256 MB use a single-block PUT — it either succeeds or fails entirely. No multipart cleanup required.
+
 ### Step 3 — Why This API Design?
 
 - **PATCH over PUT:** PUT requires sending the entire object. PATCH lets you send only what changed — better for updating just the status or adding a rejection reason.
@@ -94,6 +115,11 @@ Auth:      Azure SWA built-in (GitHub provider)
 - **Auto-update status to "Interview Stage" when first interview added:** Reduces manual status management. If you're adding interviews, you're in the interview stage.
 - **SAS token with 5-minute expiry, single-blob scope:** Short-lived = limits window of misuse. Single-blob scope = token can't be used to access other files. Create+write only = can't read or delete other blobs.
 - **Pagination with max 100 per page:** Prevents accidentally dumping hundreds of records in one response. 20 is default, 100 is the ceiling.
+- **Separate `GET /api/applications/deleted` endpoint (not a query param):** The main list always excludes deleted records — no risk of accidentally surfacing them. The deleted endpoint is an explicit, separate screen (undo/recently deleted view). Restore is already handled by `PATCH /:id/restore`.
+- **`DELETE /api/applications/:id/files/:fileType` for individual file removal:** Reads the current `blobUrl` for that `fileType` from Cosmos, deletes the blob from storage, then nulls out that field in the Cosmos record. Allows removing a file without deleting the whole application.
+- **Stats always exclude soft-deleted applications:** Deleted apps are logically gone from the user's perspective. Including them in counts would pollute the dashboard with data the user has chosen to discard.
+- **401/403 handled by Azure SWA gateway, not by Functions:** SWA enforces authentication and role-based access before requests reach the Functions. 401 = no valid session, 403 = authenticated but wrong GitHub account (configured in `staticwebapp.config.json`). Functions never need to implement auth checks — they can trust that any request they receive is from the authorised user.
+- **File re-upload overwrites via processUpload + lifecycle policy safety net:** Client SAS tokens are create+write only — deletion is never in the client's hands. `processUpload` handles old blob deletion using its storage connection string (full access). Cosmos is updated before the delete so the record stays consistent if the delete fails. A 90-day lifecycle policy on the storage account catches any blobs that escape deletion. Lifecycle management is free; the delete transactions it triggers are negligible cost for a single-user app.
 
 ## v1 Requirements (Baseline)
 
@@ -225,18 +251,22 @@ Statuses: `Applying → Application Submitted → Recruiter Screening → Interv
 | POST   | /api/upload/sas-token                         | Get SAS token for file upload                          |
 | GET    | /api/download/sas-token                       | Get SAS token for file download                        |
 | GET    | /api/applications/stats                       | Dashboard statistics                                   |
+| GET    | /api/applications/deleted                     | List soft-deleted applications (for restore/undo UI)   |
+| DELETE | /api/applications/:id/files/:fileType         | Delete a single uploaded file from an application      |
 
 ### HTTP Status Codes Used
 
-| Code | Meaning                | When Used                                                 |
-| ---- | ---------------------- | --------------------------------------------------------- |
-| 200  | OK                     | Successful GET, PATCH, DELETE                             |
-| 201  | Created                | Successful POST                                           |
-| 400  | Bad Request            | Validation failed (missing fields, invalid enum)          |
-| 404  | Not Found              | Application/interview ID doesn't exist or is soft-deleted |
-| 413  | Payload Too Large      | File exceeds 10 MB                                        |
-| 415  | Unsupported Media Type | File type not PDF/DOCX/HTML                               |
-| 500  | Internal Server Error  | Unexpected failure                                        |
+| Code | Meaning                | When Used                                                                          |
+| ---- | ---------------------- | ---------------------------------------------------------------------------------- |
+| 200  | OK                     | Successful GET, PATCH, DELETE                                                      |
+| 201  | Created                | Successful POST                                                                    |
+| 400  | Bad Request            | Validation failed (missing fields, invalid enum)                                   |
+| 401  | Unauthorized           | No valid session — returned by Azure SWA gateway, never reaches the Functions      |
+| 403  | Forbidden              | Authenticated but not the allowed GitHub account — returned by SWA gateway         |
+| 404  | Not Found              | Application/interview ID doesn't exist or is soft-deleted                          |
+| 413  | Payload Too Large      | File exceeds 10 MB                                                                 |
+| 415  | Unsupported Media Type | File type not PDF/DOCX/HTML                                                        |
+| 500  | Internal Server Error  | Unexpected failure                                                                 |
 
 ### API Response Shape (all endpoints)
 
@@ -604,8 +634,13 @@ Frontend upload flow:
 1. Call POST /api/upload/sas-token → get `uploadUrl`
 2. PUT file directly to `uploadUrl` (browser → Blob Storage)
 3. Blob Storage fires BlobCreated event → Event Grid
-4. Event Grid triggers processUpload Function → updates Cosmos DB record
-5. Frontend refreshes to see file linked
+4. Event Grid triggers processUpload Function:
+   a. Reads existing Cosmos record to check for a previous file of the same type
+   b. If one exists, deletes the old blob from Blob Storage using the Function's storage connection string
+   c. Updates Cosmos record with new `blobUrl`, `fileName`, `uploadedAt` — old reference is replaced
+5. Frontend refreshes to see updated file linked
+
+**Overwrite behaviour:** Re-uploading any file type always replaces the previous file — no version history, only the latest is retained. Cosmos is written before the old blob is deleted, so if the delete fails, the record stays consistent and the orphaned blob is caught by the Blob Storage lifecycle policy (TTL: 90 days since last modified).
 
 ---
 
@@ -638,6 +673,8 @@ SAS token properties: 5-minute expiry, read-only, single blob scope.
 
 Defaults: `from` = first day of current month, `to` = today.
 
+**Soft-deleted applications are always excluded** — `isDeleted: false` is applied to all stats queries. Deleted apps do not count toward any status totals or interview counts.
+
 **Response (200):**
 
 ```json
@@ -669,6 +706,65 @@ Defaults: `from` = first day of current month, `to` = today.
   "error": null
 }
 ```
+
+---
+
+### Endpoint Detail: GET /api/applications/deleted
+
+Returns all soft-deleted applications, ordered by `deletedAt` descending (most recently deleted first). Supports the "recently deleted" / undo UI — user can see what they deleted and restore it via `PATCH /:id/restore`.
+
+**Request:** `GET /api/applications/deleted`
+
+**Response (200):**
+
+```json
+{
+  "data": {
+    "items": [
+      {
+        "id": "abc-123",
+        "company": "Contoso Ltd",
+        "role": "Senior Cloud Engineer",
+        "status": "Interview Stage",
+        "dateApplied": "2026-03-15",
+        "deletedAt": "2026-03-19T09:00:00Z"
+      }
+    ]
+  },
+  "error": null
+}
+```
+
+Returns summary shape (same as `GET /api/applications` list items) plus `deletedAt`. No pagination — deleted list is expected to be small for a single-user app.
+
+---
+
+### Endpoint Detail: DELETE /api/applications/:id/files/:fileType
+
+Deletes a single uploaded file from an application. `fileType` must be `resume`, `coverLetter`, or `jobDescription`.
+
+**Request:** `DELETE /api/applications/abc-123/files/resume`
+
+Behaviour:
+- Reads current Cosmos record to get the `blobUrl` for the given `fileType`
+- Returns 404 if no file of that type exists on the application
+- Deletes the blob from Blob Storage using the Function's storage connection string
+- Sets the file field to `null` on the Cosmos record (`resume: null`, etc.)
+- Updates `updatedAt` on the application
+
+**Response (200):**
+
+```json
+{ "data": { "id": "abc-123", "fileType": "resume", "deleted": true }, "error": null }
+```
+
+**Response (404):**
+
+```json
+{ "data": null, "error": { "code": "NOT_FOUND", "message": "No resume found for application abc-123" } }
+```
+
+---
 
 ## Build Commands
 
@@ -724,6 +820,7 @@ job-tracker/
 - 2026-03-18: Project planned, architecture designed, TIMELINE.md created
 - 2026-03-18: Completed design steps 1–3 (user flow, data model, API contract)
 - 2026-03-18: Added design rationale (why decisions were made for Steps 1–3), expanded API contract with full request/response examples, synced TIMELINE.md with current scope, removed stale data from TIMELINE.md
+- 2026-03-19: Reviewed and completed Step 3 (API contract) — resolved gaps: file replacement/overwrite behaviour, deleted app listing endpoint, individual file delete endpoint, stats exclusion of deleted apps, 401/403 via SWA gateway. Completed Step 4 (File Upload Architecture) — CORS, blob PUT headers, client-side validation, SAS issuance validation, processUpload fileType derivation, upload completion polling, failure handling, progress bar, concurrent uploads.
 
 ---
 
