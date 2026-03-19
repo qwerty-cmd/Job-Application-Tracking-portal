@@ -31,3 +31,22 @@ Also available:
 - **Events:** Azure Event Grid (blob upload triggers)
 - **IaC:** Bicep → `infra/`
 - **Hosting:** Azure Static Web Apps (free tier)
+
+## TDD Workflow
+
+This project follows test-driven development. Use the custom agents:
+
+- **`@test-writer`** — Writes failing tests from CLAUDE.md specs (red phase)
+- **`@implementer`** — Writes code to make tests pass (green phase)
+- **`@reviewer`** — Read-only security and consistency review
+
+Use the prompt files:
+
+- **`/tdd-endpoint`** — Full TDD cycle for a single API endpoint
+- **`/security-review`** — Full codebase security audit
+
+## Scoped Instructions (auto-loaded)
+
+- `api/**/*.ts` → API conventions (response shape, Cosmos patterns, validation)
+- `api/**/*.test.ts` → Testing conventions (structure, naming, assertions)
+- `infra/**/*.bicep` → Bicep conventions (resources, security, outputs)
