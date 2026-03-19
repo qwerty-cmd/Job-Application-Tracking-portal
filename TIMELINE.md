@@ -11,7 +11,7 @@
                                ▼
 ┌──────────────────────────────────────────────────────────────────┐
 │              Azure Static Web Apps (Free Tier)                   │
-│              React / Next.js SPA Frontend                        │
+│              React + TypeScript (Vite) SPA Frontend               │
 └──────────────────────────────┬──────────────────────────────────┘
                                │ API calls
                                ▼
@@ -25,8 +25,8 @@
 ┌──────────────┐  ┌──────────────────┐  ┌─────────────────────┐
 │  Cosmos DB   │  │  Azure Blob      │  │  Azure Event Grid   │
 │  (Free Tier) │  │  Storage         │  │  (Free: 100K        │
-│  1000 RU/s   │  │  (Resumes &      │  │   ops/month)        │
-│  25 GB       │  │  Cover Letters)  │  │                     │
+│  1000 RU/s   │  │  (Resumes, CLs,  │  │   ops/month)        │
+│  25 GB       │  │  Job Descs)      │  │                     │
 └──────────────┘  └──────────────────┘  └─────────────────────┘
 ```
 
@@ -39,7 +39,7 @@
 | **Azure Static Web Apps** | Free               | ✅ Yes                                    | Hosts React frontend, built-in SSL, custom domain, GitHub Actions CI/CD |
 | **Azure Functions**       | Consumption        | ✅ Yes (1M req/mo)                        | Backend REST API — CRUD, SAS token generation                           |
 | **Azure Cosmos DB**       | Free Tier          | ✅ Yes (1000 RU/s, 25 GB)                 | Stores application records (NoSQL)                                      |
-| **Azure Blob Storage**    | LRS                | ⚠️ 5 GB free 12 months, then ~$0.02/GB/mo | Stores resume PDFs and cover letters                                    |
+| **Azure Blob Storage**    | LRS                | ⚠️ 5 GB free 12 months, then ~$0.02/GB/mo | Stores resumes, cover letters, and job descriptions                     |
 | **Azure Event Grid**      | —                  | ✅ Yes (100K ops/mo)                      | Fires events on blob upload → triggers Function                         |
 | **GitHub Actions**        | Free (public repo) | ✅ Yes                                    | CI/CD pipeline                                                          |
 
@@ -92,7 +92,7 @@ Function updates Cosmos DB record with blob URL, file name, timestamp
 | --------------------- | ------------------------------------------------- |
 | Effort type           | Side project (evenings/weekends) — ~8–10 hrs/week |
 | Developer count       | 1                                                 |
-| AI assistance         | GitHub Copilot (VS Code) + Claude Code            |
+| AI assistance         | GitHub Copilot (VS Code, Claude model)            |
 | Azure familiarity     | Intermediate                                      |
 | React familiarity     | Intermediate                                      |
 | Bicep/IaC familiarity | Beginner-to-intermediate                          |
@@ -103,35 +103,37 @@ Function updates Cosmos DB record with blob URL, file name, timestamp
 
 **Effort: ~8 hrs | Calendar: Week 1**
 
-| Task                                                     | Effort | Notes                                                 |
-| -------------------------------------------------------- | ------ | ----------------------------------------------------- |
-| Finalize tech stack decisions                            | 2 hrs  | Confirm React vs Next.js, Node.js vs Python Functions |
-| Define data model (Cosmos DB schema)                     | 2 hrs  | Partition key strategy, item structure                |
-| Design REST API contract (endpoints, request/response)   | 3 hrs  | OpenAPI/Swagger spec recommended                      |
-| Draw architecture diagram (publishable)                  | 2 hrs  | draw.io or Excalidraw — portfolio artifact            |
-| Define file naming conventions, blob container structure | 1 hr   | e.g., `resumes/{applicationId}/{filename}`            |
-| Create GitHub repo, branch strategy, README skeleton     | 1 hr   | `main` + `develop` branches                           |
+| Task                                                              | Effort | Notes                                                       |
+| ----------------------------------------------------------------- | ------ | ----------------------------------------------------------- |
+| Step 1: User flow & requirements (R1–R6, v2 R7–R8)                | 1 hr   | Status flow, rejection reasons, interview types, file types |
+| Step 2: Data model (Cosmos DB schema, partition key)              | 1 hr   | Embed interviews, `/id` partition key, soft delete          |
+| Step 3: API contract (15 endpoints, request/response, validation) | 2 hrs  | PATCH, `{ data, error }` shape, pagination, SAS token flow  |
+| Step 4: File upload architecture                                  | 1 hr   | SAS tokens, CORS, processUpload, polling, re-upload/race    |
+| Step 5: Event-driven pipeline                                     | 1 hr   | System topic, Event Grid Schema, dead-letter, idempotency   |
+| Step 6: Authentication & security                                 | 1 hr   | SWA built-in GitHub auth, owner role, no APIM/JWT in v1     |
+| Step 7: Infrastructure & deployment planning                      | 1 hr   | Bicep topology, outputs, gated before Phase 1               |
 
 ---
 
 ## Phase 1: Infrastructure as Code (Bicep)
 
-**Effort: 5–6 hrs | Calendar: Week 1**
+**Effort: 7–8 hrs | Calendar: Week 1**
 
-| Task                                                    | Effort  | Notes                            |
-| ------------------------------------------------------- | ------- | -------------------------------- |
-| Write Bicep: Cosmos DB (free tier, database, container) | 1 hr    | Partition key, indexing policy   |
-| Write Bicep: Storage Account + blob containers          | 0.5 hrs | CORS rules for browser uploads   |
-| Write Bicep: Azure Functions (Consumption plan)         | 1 hr    | App settings, connection strings |
-| Write Bicep: Azure Static Web Apps                      | 0.5 hrs | GitHub integration config        |
-| Write Bicep: Event Grid subscription (blob → function)  | 1 hr    | Event filtering                  |
-| Parameters file + deploy & validate                     | 1.5 hrs | Debug any ARM errors             |
+| Task                                                       | Effort  | Notes                                                                                                                      |
+| ---------------------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Write Bicep: Cosmos DB (free tier, database, container)    | 1 hr    | Partition key `/id`, indexing policy                                                                                       |
+| Write Bicep: Storage Account + blob containers + lifecycle | 1 hr    | 4 containers (`resumes`, `coverletters`, `jobdescriptions`, `deadletter`), CORS (SWA origin only), 90-day lifecycle policy |
+| Write Bicep: Azure Functions (Consumption plan)            | 1 hr    | App settings, connection strings                                                                                           |
+| Write Bicep: Azure Static Web Apps + auth/route config     | 1 hr    | GitHub integration, `staticwebapp.config.json` with `owner` role routes, role invitation                                   |
+| Write Bicep: Event Grid system topic + subscription        | 1 hr    | System topic from Storage, BlobCreated-only filter, dead-letter to `deadletter` container                                  |
+| Parameters file + deploy & validate                        | 1.5 hrs | Debug any ARM errors                                                                                                       |
+| Verify infrastructure outputs                              | 0.5 hrs | SWA hostname, Function app name, Cosmos endpoint, Storage account name                                                     |
 
 ---
 
 ## Phase 2: Backend API — CRUD (Azure Functions)
 
-**Effort: 8–9 hrs | Calendar: Week 2**
+**Effort: 10–11 hrs | Calendar: Week 2**
 
 | Task                                                  | Effort  | Notes                                                             |
 | ----------------------------------------------------- | ------- | ----------------------------------------------------------------- |
@@ -140,7 +142,9 @@ Function updates Cosmos DB record with blob URL, file name, timestamp
 | `createApplication` function (POST)                   | 1 hr    | Input validation, generate ID, write to Cosmos                    |
 | `getApplications` function (GET all + GET by ID)      | 1 hr    | Query with pagination, point read                                 |
 | `updateApplication` function (PATCH)                  | 0.5 hrs | Partial update, rejection validation                              |
-| `deleteApplication` + `restoreApplication` functions  | 0.5 hrs | Soft delete + undelete                                            |
+| `deleteApplication` + `restoreApplication` functions  | 0.5 hrs | Soft delete + undelete via PATCH /:id/restore                     |
+| `getDeletedApplications` function (GET)               | 0.5 hrs | List soft-deleted apps, ordered by deletedAt desc                 |
+| `deleteFile` function (DELETE /:id/files/:fileType)   | 0.5 hrs | Delete blob + null Cosmos field                                   |
 | `getUploadSasToken` + `getDownloadSasToken` functions | 1.5 hrs | Generate scoped SAS tokens for upload (write) and download (read) |
 | Interview CRUD functions (add/update/delete/reorder)  | 1.5 hrs | Nested interview management within application                    |
 | Dashboard stats endpoint                              | 1 hr    | Aggregate counts by status and interview type                     |
@@ -150,15 +154,15 @@ Function updates Cosmos DB record with blob URL, file name, timestamp
 
 ## Phase 3: Event Streaming Pipeline
 
-**Effort: 5–6 hrs | Calendar: Week 2**
+**Effort: 6–7 hrs | Calendar: Week 2**
 
-| Task                                                   | Effort  | Notes                                         |
-| ------------------------------------------------------ | ------- | --------------------------------------------- |
-| Configure Blob Storage event subscription → Event Grid | 1 hr    | Filter for `BlobCreated`, specific containers |
-| Build `processUpload` function (Event Grid trigger)    | 1.5 hrs | Parse event payload, extract metadata         |
-| Logic: link uploaded file to Cosmos DB record          | 1 hr    | Update record with blob URL, timestamp        |
-| Error handling: dead-letter, retries                   | 1 hr    | Handle orphaned uploads                       |
-| End-to-end testing                                     | 1.5 hrs | Upload → event fires → DB updated             |
+| Task                                                | Effort  | Notes                                                                                          |
+| --------------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------- |
+| Configure Event Grid system topic + subscription    | 1 hr    | System topic from Storage, BlobCreated filter, Event Grid Schema                               |
+| Build `processUpload` function (Event Grid trigger) | 2 hrs   | Event Grid trigger binding, derive fileType from container name                                |
+| processUpload logic: validation + Cosmos update     | 1.5 hrs | Size check, magic bytes, soft-delete skip, "latest wins" timestamp, idempotent old blob delete |
+| Dead-letter container + retry handling              | 0.5 hrs | Dead-letter to `deadletter` container, default retry policy (30/24hr)                          |
+| End-to-end testing                                  | 1.5 hrs | Upload → event fires → DB updated, re-upload overwrites                                        |
 
 ---
 
@@ -198,15 +202,16 @@ Function updates Cosmos DB record with blob URL, file name, timestamp
 
 ## Phase 6: Polish & Showcase-Ready
 
-**Effort: 7–8 hrs | Calendar: Week 3–4**
+**Effort: 5.5–6.5 hrs | Calendar: Week 3–4**
 
-| Task                                                   | Effort  | Notes                                 |
-| ------------------------------------------------------ | ------- | ------------------------------------- |
-| Add GitHub auth (Static Web Apps built-in)             | 1.5 hrs | Restrict write access to your account |
-| Activity/event log view per application                | 2 hrs   | Timeline of status changes, uploads   |
-| README: architecture diagram, screenshots, setup guide | 2 hrs   | Portfolio-ready documentation         |
-| Final UI polish, edge case fixes                       | 1.5 hrs |                                       |
-| Security review (SAS token expiry, CORS, validation)   | 1.5 hrs |                                       |
+| Task                                                   | Effort  | Notes                                  |
+| ------------------------------------------------------ | ------- | -------------------------------------- |
+| Activity/event log view per application                | 2 hrs   | Timeline of status changes, uploads    |
+| README: architecture diagram, screenshots, setup guide | 2 hrs   | Portfolio-ready documentation          |
+| Final UI polish, edge case fixes                       | 1.5 hrs |                                        |
+| Security review (SAS token expiry, CORS, validation)   | 1.5 hrs | Verify auth config deployed in Phase 1 |
+
+> **Note:** GitHub auth (SWA built-in, `owner` role, route restrictions) is provisioned in Phase 1 as infrastructure, not deferred to polish.
 
 ---
 
@@ -215,13 +220,13 @@ Function updates Cosmos DB record with blob URL, file name, timestamp
 | Phase                          | Effort (hrs)   | Calendar (@ 8–10 hrs/week) |
 | ------------------------------ | -------------- | -------------------------- |
 | **0 — Architecture & Design**  | 8              | Week 1                     |
-| **1 — Infrastructure (Bicep)** | 5–6            | Week 1                     |
-| **2 — Backend API**            | 8–9            | Week 2                     |
-| **3 — Event Streaming**        | 5–6            | Week 2                     |
+| **1 — Infrastructure (Bicep)** | 7–8            | Week 1                     |
+| **2 — Backend API**            | 10–11          | Week 2                     |
+| **3 — Event Streaming**        | 6–7            | Week 2                     |
 | **4 — Frontend**               | 13–15          | Week 2–4                   |
 | **5 — CI/CD & Deploy**         | 3–4            | Week 4                     |
-| **6 — Polish & Showcase**      | 7–8            | Week 4–5                   |
-| **Total**                      | **~53–62 hrs** | **~4–5 weeks**             |
+| **6 — Polish & Showcase**      | 5.5–6.5        | Week 4–5                   |
+| **Total**                      | **~53–61 hrs** | **~4–5 weeks**             |
 
 > **If working full-time (~40 hrs/week): ~1.5–2 weeks**
 
@@ -262,16 +267,16 @@ Phase 0 (Design)
 
 ## AI Tooling Split
 
-| Task                                             | Best Tool             | Rationale                                         |
-| ------------------------------------------------ | --------------------- | ------------------------------------------------- |
-| Architecture decisions, data model, API contract | **Copilot (VS Code)** | Conversational planning, iterative design         |
-| Generate full Bicep files                        | **Either**            | Both handle IaC well                              |
-| Scaffold Azure Functions + all CRUD              | **Claude Code**       | Strong at full project generation from specs      |
-| React components, pages, forms                   | **Claude Code**       | Excels at complete connected frontend in one pass |
-| Debug deployment issues                          | **Copilot (VS Code)** | Sees terminal output and errors in real time      |
-| Event Grid trigger function                      | **Either**            | Well-documented pattern                           |
-| GitHub Actions workflow                          | **Copilot (VS Code)** | Generate directly in repo                         |
-| Code review / explain generated code             | **Copilot (VS Code)** | Walks through code in editor context              |
+| Task                                             | Best Tool             | Rationale                                    |
+| ------------------------------------------------ | --------------------- | -------------------------------------------- |
+| Architecture decisions, data model, API contract | **Copilot (VS Code)** | Conversational planning, iterative design    |
+| Generate full Bicep files                        | **Copilot (VS Code)** | Claude model handles IaC well                |
+| Scaffold Azure Functions + all CRUD              | **Copilot (VS Code)** | TDD agents generate from CLAUDE.md specs     |
+| React components, pages, forms                   | **Copilot (VS Code)** | Agent-driven implementation in one pass      |
+| Debug deployment issues                          | **Copilot (VS Code)** | Sees terminal output and errors in real time |
+| Event Grid trigger function                      | **Copilot (VS Code)** | Well-documented pattern                      |
+| GitHub Actions workflow                          | **Copilot (VS Code)** | Generate directly in repo                    |
+| Code review / explain generated code             | **Copilot (VS Code)** | Walks through code in editor context         |
 
 ---
 

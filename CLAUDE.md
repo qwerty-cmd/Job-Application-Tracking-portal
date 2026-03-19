@@ -16,36 +16,42 @@ Auth:      Azure SWA built-in (GitHub provider)
 
 ## Current Status
 
-- [ ] Phase 0: Architecture & Design — **in progress (Steps 1–3 done, Steps 4–7 remain)**
-- [ ] Phase 1: Infrastructure (Bicep)
+- [x] Phase 0: Architecture & Design — **complete**
+- [ ] Phase 1: Infrastructure (Bicep) — **in progress (Bicep templates created, pending deployment)**
 - [ ] Phase 2: Backend API (CRUD Functions)
 - [ ] Phase 3: Event Streaming Pipeline
 - [ ] Phase 4: Frontend (React)
 - [ ] Phase 5: CI/CD & Deployment
 - [ ] Phase 6: Polish & Showcase-Ready
 
-**Currently working on:** Phase 0 — Steps 1–4 complete. Next: Step 5 (Event-Driven Pipeline), Step 6 (Auth), Step 7 (Infra & Deployment).
+**Currently working on:** Phase 1 — Bicep templates written and validated; next step is deploying infrastructure and verifying outputs.
 
 ## Design Steps Tracker
 
-| Step | Topic                       | Status      |
-| ---- | --------------------------- | ----------- |
-| 1    | User Flow & Requirements    | ✅ Done     |
-| 2    | Data Model (Cosmos DB)      | ✅ Done     |
-| 3    | API Contract                | ✅ Done     |
-| 4    | File Upload Architecture    | ✅ Done     |
-| 5    | Event-Driven Pipeline       | Not started |
-| 6    | Authentication & Security   | Not started |
-| 7    | Infrastructure & Deployment | Not started |
+| Step | Topic                       | Status     |
+| ---- | --------------------------- | ---------- |
+| 1    | User Flow & Requirements    | ✅ Done    |
+| 2    | Data Model (Cosmos DB)      | ✅ Done    |
+| 3    | API Contract                | ✅ Done    |
+| 4    | File Upload Architecture    | ✅ Done    |
+| 5    | Event-Driven Pipeline       | ✅ Done    |
+| 6    | Authentication & Security   | ✅ Done    |
+| 7    | Infrastructure & Deployment | ✅ Planned |
 
 ## Decisions Made
 
 - Partition key: `/id`
-- Blob path structure: `{containerName}/{applicationId}/{filename}`
+- Blob path structure: `{containerName}/{applicationId}/{timestamp}-{filename}` (timestamped to prevent collisions)
 - Blob containers: `resumes`, `coverletters`, `jobdescriptions`
 - SAS token expiry: 5 minutes
 - SAS token scope: single blob, create+write only (no read/delete)
 - Auth: Azure SWA built-in GitHub provider (restrict to personal account)
+- App access model: private app; all frontend routes and `/api/*` require a custom `owner` role (not just `authenticated`)
+- Authorization roles: SWA built-in roles (`anonymous`, `authenticated`) plus custom `owner`; only the personal GitHub account is assigned `owner`
+- AuthN/AuthZ enforcement point: Azure Static Web Apps gateway enforces route authorization and returns 401/403 before requests reach Azure Functions
+- API identity mechanism: SWA-managed auth session and client principal (`x-ms-client-principal`) for API context; no custom JWT issuance/validation flow in v1
+- API keys are not used for browser-to-API authentication in this app
+- Rate limiting strategy (v1): no API Management; rely on private owner-only access plus targeted in-function defensive throttling for sensitive endpoints (especially SAS token issuance/download)
 - Cosmos DB client: singleton pattern in `api/shared/cosmosClient.ts`
 - File uploads: direct browser → Blob via SAS token (never proxy through Functions)
 - Soft delete (isDeleted flag + deletedAt timestamp, with undelete endpoint)
@@ -54,12 +60,30 @@ Auth:      Azure SWA built-in (GitHub provider)
 - Adding first interview auto-updates status to "Interview Stage"
 - File download uses a separate endpoint from upload SAS token
 - File re-upload overwrites the previous file — `processUpload` Function deletes the old blob (using storage connection string) then updates Cosmos with new file metadata; Blob Storage lifecycle policy (90-day last-modified TTL) acts as safety net for any blobs that escape deletion
+- Blob paths include a timestamp: `{container}/{applicationId}/{timestamp}-{filename}` — each upload gets a unique path, preventing overwrite collisions and enabling "latest wins" logic in processUpload
+- Race condition safety: when multiple uploads of the same fileType race, processUpload compares the blob's timestamp against the existing Cosmos record's `uploadedAt` — only processes if newer ("latest wins"); older events are discarded and their blobs are cleaned up by lifecycle policy
 - CORS on Blob Storage: allow `PUT`, `GET`, `HEAD` from SWA origin (`https://*.azurestaticapps.net`); exposed headers: `Content-Type`, `x-ms-blob-type`; configured in Bicep on the storage account
 - Browser blob PUT requires headers: `x-ms-blob-type: BlockBlob` and `Content-Type` matching the file MIME type
 - Client-side validation runs before SAS token request: check file extension and size (max 10 MB); show inline error if invalid — avoids burning a token on a bad file
 - SAS token issuance validates: `applicationId` exists in Cosmos (404 if not), `fileType` is valid enum, `fileName` ends in allowed extension
 - `processUpload` derives `fileType` from container name in blob path: `resumes` → `resume`, `coverletters` → `coverLetter`, `jobdescriptions` → `jobDescription`
-- Upload completion detection: frontend polls `GET /:id` every 2 seconds (max 15 seconds) after PUT succeeds, until the file field is non-null; shows "processing" state if timeout reached
+- `processUpload` skips processing if the application is soft-deleted (`isDeleted: true`) — orphaned blob is cleaned up by the 90-day lifecycle policy
+- `processUpload` validates file content via magic bytes before updating Cosmos: PDF must start with `%PDF`, DOCX must start with `PK` (ZIP signature), HTML must start with `<!DOCTYPE` or `<html` (case-insensitive); if validation fails, the blob is deleted and Cosmos is not updated
+- `processUpload` must be idempotent — Event Grid may deliver the same event multiple times (retry on failure); "blob not found" on old blob deletion is treated as success, not an error
+- Event Grid retry behaviour: if processUpload fails, Event Grid retries with exponential backoff for up to 24 hours; processUpload must handle duplicate deliveries gracefully
+- Event pipeline uses Azure Event Grid system topic from Blob Storage (not custom topic)
+- Event pipeline uses a single Event Grid subscription for uploads; Event Grid filters to `Microsoft.Storage.BlobCreated`, and `processUpload` accepts only `resumes`, `coverletters`, and `jobdescriptions`
+- Event Grid event schema: Event Grid Schema (not CloudEvents 1.0) — simpler for an Azure-only project and aligns better with Azure-native docs/examples
+- Event destination: Azure Function Event Grid trigger binding for `processUpload` (not manual HTTP webhook validation)
+- Dead-lettering enabled on the Event Grid subscription, writing undelivered events to a dedicated Blob Storage container for inspection/replay
+- Event Grid retry policy uses the service defaults: up to 30 delivery attempts and 24-hour TTL; undeliverable events are dead-lettered after retry exhaustion
+- IaC deployment topology: Azure Static Web Apps + separate Azure Functions app (Consumption) + Cosmos DB + Storage + Event Grid system topic/subscription, all provisioned via Bicep
+- Bicep structure: `infra/main.bicep` as entrypoint with modular resources and `infra/parameters.json` for environment-specific values
+- Storage containers managed by IaC: `resumes`, `coverletters`, `jobdescriptions`, and `deadletter`
+- Event Grid subscription configuration in IaC includes BlobCreated-only filtering and dead-letter destination wiring
+- Infrastructure outputs must expose key deployment values (SWA hostname, Function app name, Cosmos endpoint, Storage account name) for post-deploy configuration/validation
+- Step 7 scope is planning-only: no Phase 1 resource implementation starts until planning docs are reviewed and approved
+- Upload completion detection: frontend records `Date.now()` before the PUT, then polls `GET /:id` every 2 seconds (max 15 seconds) until the file field's `uploadedAt` is newer than the recorded timestamp; handles both first upload (field was null) and re-upload (field had old timestamp); shows "processing" state if timeout reached
 - Upload failure handling: if PUT fails, frontend discards the SAS token and shows an error — user retries from scratch (requests a new token); no partial recovery needed (blob PUT is atomic under 256 MB)
 - Upload progress: v1 shows a progress bar using `XMLHttpRequest` with `upload.onprogress`
 - Concurrent uploads: allowed — resume and cover letter can be uploaded simultaneously; each has its own SAS token and independent blob path
@@ -103,8 +127,45 @@ Auth:      Azure SWA built-in (GitHub provider)
 - **`applicationId` validated before issuing SAS token:** Prevents orphaned blobs for non-existent applications. A token issued for a deleted or non-existent application would result in a blob with no Cosmos record to link to.
 - **`processUpload` derives fileType from container name:** The BlobCreated event payload includes the blob URL. Parsing the container name is more reliable than embedding fileType in the blob path or filename, and requires no changes to the SAS token flow.
 - **Polling over WebSockets/SignalR for upload completion:** Event Grid → Function → Cosmos is async but fast (typically <2 seconds). Polling every 2 seconds for up to 15 seconds is simple, free, and sufficient for v1. SignalR adds a new Azure service and complexity that isn't justified.
+- **Polling compares `uploadedAt` timestamps (not just field existence):** On re-upload, the file field is already non-null with old metadata. Checking field existence would immediately succeed and show stale data. Comparing `uploadedAt` against the timestamp recorded before the PUT ensures the frontend waits for the new processUpload to complete.
+- **Timestamped blob paths prevent race conditions:** Each upload gets a unique path (`{container}/{applicationId}/{timestamp}-{filename}`). If two uploads of the same fileType race, processUpload uses "latest wins" — compares the blob's timestamp against Cosmos `uploadedAt` and only processes if newer. The older blob is left for the lifecycle policy to clean up.
+- **processUpload skips soft-deleted applications:** Between SAS issuance (which validates the app exists) and processUpload execution, the application could be soft-deleted. Processing an upload for a deleted app would create an inconsistency. Skipping it is safe — the orphaned blob is caught by the 90-day lifecycle policy.
+- **Event Grid retry + processUpload idempotency:** Event Grid retries failed deliveries with exponential backoff for up to 24 hours. processUpload must be idempotent — treating "blob not found" on old blob deletion as a success (not an error) ensures retries don't fail on already-cleaned-up state.
+- **Server-side content validation via magic bytes:** File extension checks alone are trivially bypassed. Since this is a public app, processUpload reads the first few bytes of the blob and validates against known signatures (PDF: `%PDF`, DOCX: `PK`/ZIP, HTML: `<!DOCTYPE`/`<html`). If content doesn't match, the blob is deleted and Cosmos is not updated. This is ~10 lines of code with no new dependencies.
+- **SAS token `Content-Length` constraint + processUpload size check (defence in depth):** The SAS token limits `Content-Length` to 10 MB (10485760 bytes) at the storage layer. processUpload also checks blob size after upload and deletes oversized blobs. Client-side validation is the first gate, SAS constraint is the second, processUpload is the third.
 - **`XMLHttpRequest` for progress over fetch:** `fetch` doesn't expose upload progress natively in all browsers. `XMLHttpRequest.upload.onprogress` is well-supported and straightforward for a single PUT.
 - **Atomic blob PUT means no partial recovery needed:** Files under 256 MB use a single-block PUT — it either succeeds or fails entirely. No multipart cleanup required.
+
+### Step 5 — Why This Event-Driven Pipeline?
+
+- **Azure Event Grid system topic over custom topic:** Blob Storage already emits first-party events. A system topic is the native integration point, avoids extra infrastructure, and matches how Azure expects Storage events to be wired.
+- **Single Event Grid subscription over one-per-container:** Cost is effectively the same for this app because billing is driven by event operations, not by whether container filtering is split across multiple subscriptions. One subscription keeps Bicep simpler; `processUpload` already derives the container name and can reject any container outside the three allowed upload containers.
+- **Event Grid Schema over CloudEvents 1.0:** Both schemas carry the same blob event data, but this is an Azure-only project. Event Grid Schema is easier to reason about, aligns with Azure-native examples, and avoids introducing portability concepts that don't add practical value here.
+- **Event Grid trigger binding over HTTP webhook:** The Functions binding removes manual subscription validation and request parsing. That keeps the handler smaller and lowers the chance of wiring mistakes.
+- **Filter to `Microsoft.Storage.BlobCreated` only:** `processUpload` should run only for successful uploads. Excluding delete events prevents noise from lifecycle policy cleanup or manual blob deletion.
+- **Dead-letter to Blob Storage:** If retries are exhausted, the event should be inspectable instead of silently disappearing. Blob dead-lettering is cheap, native, and sufficient for a single-user app.
+- **Keep default retry policy:** Event Grid's default retry window (24-hour TTL, up to 30 attempts) is already appropriate here. There's no need to tune retry timing for a low-volume personal app unless real failures show a problem.
+- **Idempotency is required because retries can happen after partial success:** Even if Cosmos was already updated on a previous attempt, a retry must be safe. The "latest wins" timestamp check plus "blob not found" as a successful delete outcome makes repeated deliveries harmless.
+
+### Step 6 — Why This Authentication & Security Model?
+
+- **Use SWA built-in GitHub provider:** This app is personal and Azure-only. Built-in auth avoids custom identity plumbing and reduces the risk of security mistakes.
+- **Private app with `owner` role (not `authenticated`):** `authenticated` allows any signed-in user from enabled providers. Restricting routes to `owner` ensures only the intended personal account can access the app and APIs.
+- **Gateway-enforced authorization over function-level auth middleware:** SWA handles 401/403 before Functions execute, reducing backend code complexity and giving a consistent access boundary.
+- **SWA session/client principal over API keys:** Browser API keys are not secret and are poor for user-level auth. SWA-managed auth context is safer and aligns with route-based authorization.
+- **No custom JWT flow in v1:** SWA already manages authentication state. Adding custom JWT issuance/verification would duplicate platform features with little benefit for a single-user app.
+- **Rate limiting without APIM in v1:** API Management adds unnecessary cost/complexity for a private personal app. Targeted throttling on sensitive endpoints provides practical protection while keeping architecture lean.
+- **Defence in depth remains in Functions:** Even with gateway auth, backend handlers still validate payloads, file metadata, and business rules to prevent logic abuse.
+
+### Step 7 — Why This Infrastructure & Deployment Plan?
+
+- **Keep all core infrastructure in Bicep:** Infrastructure as code makes provisioning repeatable, reviewable, and less error-prone than portal-first setup.
+- **Separate SWA and Functions resources:** SWA handles frontend/auth edge concerns while a dedicated Function app handles API/event workloads with clearer operational boundaries.
+- **Provision upload and reliability primitives up front:** Blob containers and Event Grid dead-letter storage are part of baseline infrastructure, not afterthoughts.
+- **Use parameterized deployments:** `infra/parameters.json` keeps environment values out of templates and allows safe repeat deployments across environments.
+- **Define deterministic deployment outputs:** Exposing endpoints/names from IaC reduces manual lookup errors during app configuration and smoke testing.
+- **Wire security-relevant settings in infrastructure:** CORS, event filters, and dead-letter routing are deployment concerns and should remain under IaC control.
+- **Gate execution after planning review:** Locking Step 7 as planning-only ensures Phase 1 starts from approved design decisions and avoids rework.
 
 ### Step 3 — Why This API Design?
 
@@ -118,7 +179,7 @@ Auth:      Azure SWA built-in (GitHub provider)
 - **Separate `GET /api/applications/deleted` endpoint (not a query param):** The main list always excludes deleted records — no risk of accidentally surfacing them. The deleted endpoint is an explicit, separate screen (undo/recently deleted view). Restore is already handled by `PATCH /:id/restore`.
 - **`DELETE /api/applications/:id/files/:fileType` for individual file removal:** Reads the current `blobUrl` for that `fileType` from Cosmos, deletes the blob from storage, then nulls out that field in the Cosmos record. Allows removing a file without deleting the whole application.
 - **Stats always exclude soft-deleted applications:** Deleted apps are logically gone from the user's perspective. Including them in counts would pollute the dashboard with data the user has chosen to discard.
-- **401/403 handled by Azure SWA gateway, not by Functions:** SWA enforces authentication and role-based access before requests reach the Functions. 401 = no valid session, 403 = authenticated but wrong GitHub account (configured in `staticwebapp.config.json`). Functions never need to implement auth checks — they can trust that any request they receive is from the authorised user.
+- **401/403 handled by Azure SWA gateway, not by Functions:** SWA enforces authentication and role-based access before requests reach the Functions. 401 = no valid session, 403 = authenticated but missing required `owner` role. Functions never need to implement primary auth checks — they can trust that any request they receive passed the SWA access rules.
 - **File re-upload overwrites via processUpload + lifecycle policy safety net:** Client SAS tokens are create+write only — deletion is never in the client's hands. `processUpload` handles old blob deletion using its storage connection string (full access). Cosmos is updated before the delete so the record stays consistent if the delete fails. A 90-day lifecycle policy on the storage account catches any blobs that escape deletion. Lifecycle management is free; the delete transactions it triggers are negligible cost for a single-user app.
 
 ## v1 Requirements (Baseline)
@@ -178,7 +239,7 @@ Statuses: `Applying → Application Submitted → Recruiter Screening → Interv
 
 ## Data Model (Cosmos DB)
 
-**Container:** `applications` | **Partition Key:** `/id` | **Soft delete:** `isDeleted` + `deletedAt`
+**Database:** `jobtracker` | **Container:** `applications` | **Partition Key:** `/id` | **Soft delete:** `isDeleted` + `deletedAt`
 
 ```json
 {
@@ -256,17 +317,17 @@ Statuses: `Applying → Application Submitted → Recruiter Screening → Interv
 
 ### HTTP Status Codes Used
 
-| Code | Meaning                | When Used                                                                          |
-| ---- | ---------------------- | ---------------------------------------------------------------------------------- |
-| 200  | OK                     | Successful GET, PATCH, DELETE                                                      |
-| 201  | Created                | Successful POST                                                                    |
-| 400  | Bad Request            | Validation failed (missing fields, invalid enum)                                   |
-| 401  | Unauthorized           | No valid session — returned by Azure SWA gateway, never reaches the Functions      |
-| 403  | Forbidden              | Authenticated but not the allowed GitHub account — returned by SWA gateway         |
-| 404  | Not Found              | Application/interview ID doesn't exist or is soft-deleted                          |
-| 413  | Payload Too Large      | File exceeds 10 MB                                                                 |
-| 415  | Unsupported Media Type | File type not PDF/DOCX/HTML                                                        |
-| 500  | Internal Server Error  | Unexpected failure                                                                 |
+| Code | Meaning                | When Used                                                                     |
+| ---- | ---------------------- | ----------------------------------------------------------------------------- |
+| 200  | OK                     | Successful GET, PATCH, DELETE                                                 |
+| 201  | Created                | Successful POST                                                               |
+| 400  | Bad Request            | Validation failed (missing fields, invalid enum)                              |
+| 401  | Unauthorized           | No valid session — returned by Azure SWA gateway, never reaches the Functions |
+| 403  | Forbidden              | Authenticated but not the allowed GitHub account — returned by SWA gateway    |
+| 404  | Not Found              | Application/interview ID doesn't exist or is soft-deleted                     |
+| 413  | Payload Too Large      | File exceeds 10 MB                                                            |
+| 415  | Unsupported Media Type | File type not PDF/DOCX/HTML                                                   |
+| 500  | Internal Server Error  | Unexpected failure                                                            |
 
 ### API Response Shape (all endpoints)
 
@@ -285,6 +346,7 @@ Statuses: `Applying → Application Submitted → Recruiter Screening → Interv
 - `sortBy` — dateApplied, company, status, updatedAt (default: dateApplied)
 - `sortOrder` — asc, desc (default: desc)
 - `page` / `pageSize` — pagination (default: page 1, pageSize 20, max 100)
+- Free-text search (by company/role) is deferred to v2
 
 ### API Validation Rules
 
@@ -296,11 +358,14 @@ Statuses: `Applying → Application Submitted → Recruiter Screening → Interv
 - `jobDescriptionText` max 50,000 chars
 - `location.workMode` must be one of: Remote, Hybrid, Onsite (if provided)
 - Interview `type` required, must be valid enum
+- Interview `date` required, valid YYYY-MM-DD (future dates allowed — interviews are scheduled ahead)
 - Interview `outcome` required, must be: Passed, Failed, Pending, Cancelled
 - Interview `interviewers` max 500 chars
 - Interview `notes` and `reflection` max 10,000 chars
-- SAS token: 5-minute expiry, scoped to single blob, enforces 10 MB max
+- SAS token: 5-minute expiry, scoped to single blob, `Content-Length` limited to 10 MB (10485760 bytes) via SAS `Content-Length` constraint; processUpload also checks blob size and deletes if > 10 MB (defence in depth)
 - File names must end in `.pdf`, `.docx`, or `.html` (JD only)
+- `contentType` must match file extension: `.pdf` → `application/pdf`, `.docx` → `application/vnd.openxmlformats-officedocument.wordprocessingml.document`, `.html` → `text/html`
+- File content validated server-side by processUpload via magic bytes: PDF (`%PDF`), DOCX (`PK`/ZIP), HTML (`<!DOCTYPE` or `<html`); mismatched content → blob deleted, Cosmos not updated, returns 415
 
 ---
 
@@ -619,8 +684,8 @@ Validation: `applicationId` must exist. `fileType` must be `resume`, `coverLette
 ```json
 {
   "data": {
-    "uploadUrl": "https://<storage>.blob.core.windows.net/resumes/abc-123/my-resume.pdf?sv=2021-06-08&se=2026-03-15T10:35:00Z&sr=b&sp=cw&sig=...",
-    "blobPath": "resumes/abc-123/my-resume.pdf",
+    "uploadUrl": "https://<storage>.blob.core.windows.net/resumes/abc-123/1710498900000-my-resume.pdf?sv=2021-06-08&se=2026-03-15T10:35:00Z&sr=b&sp=cw&sig=...",
+    "blobPath": "resumes/abc-123/1710498900000-my-resume.pdf",
     "expiresAt": "2026-03-15T10:35:00Z"
   },
   "error": null
@@ -635,9 +700,13 @@ Frontend upload flow:
 2. PUT file directly to `uploadUrl` (browser → Blob Storage)
 3. Blob Storage fires BlobCreated event → Event Grid
 4. Event Grid triggers processUpload Function:
-   a. Reads existing Cosmos record to check for a previous file of the same type
-   b. If one exists, deletes the old blob from Blob Storage using the Function's storage connection string
-   c. Updates Cosmos record with new `blobUrl`, `fileName`, `uploadedAt` — old reference is replaced
+   a. Validates blob size (≤ 10 MB) — deletes blob and exits if oversized
+   b. Validates file content via magic bytes — deletes blob and exits if mismatched
+   c. Reads existing Cosmos record for the applicationId
+   d. Checks if application is soft-deleted — skips processing if `isDeleted: true`
+   e. Compares blob timestamp against existing Cosmos `uploadedAt` — skips if older ("latest wins")
+   f. Updates Cosmos record with new `blobUrl`, `fileName`, `uploadedAt` — old reference is replaced
+   g. If a previous file of the same type exists, deletes the old blob from Blob Storage using the Function's storage connection string
 5. Frontend refreshes to see updated file linked
 
 **Overwrite behaviour:** Re-uploading any file type always replaces the previous file — no version history, only the latest is retained. Cosmos is written before the old blob is deleted, so if the delete fails, the record stays consistent and the orphaned blob is caught by the Blob Storage lifecycle policy (TTL: 90 days since last modified).
@@ -725,8 +794,21 @@ Returns all soft-deleted applications, ordered by `deletedAt` descending (most r
         "id": "abc-123",
         "company": "Contoso Ltd",
         "role": "Senior Cloud Engineer",
-        "status": "Interview Stage",
+        "location": {
+          "city": "Sydney",
+          "country": "Australia",
+          "workMode": "Hybrid",
+          "other": null
+        },
         "dateApplied": "2026-03-15",
+        "status": "Interview Stage",
+        "jobPostingUrl": "https://careers.contoso.com/job/12345",
+        "hasResume": true,
+        "hasCoverLetter": true,
+        "hasJobDescription": true,
+        "interviewCount": 2,
+        "createdAt": "2026-03-15T10:30:00Z",
+        "updatedAt": "2026-03-25T16:00:00Z",
         "deletedAt": "2026-03-19T09:00:00Z"
       }
     ]
@@ -735,7 +817,7 @@ Returns all soft-deleted applications, ordered by `deletedAt` descending (most r
 }
 ```
 
-Returns summary shape (same as `GET /api/applications` list items) plus `deletedAt`. No pagination — deleted list is expected to be small for a single-user app.
+Returns same summary shape as `GET /api/applications` list items, plus `deletedAt`. No pagination — deleted list is expected to be small for a single-user app.
 
 ---
 
@@ -746,6 +828,7 @@ Deletes a single uploaded file from an application. `fileType` must be `resume`,
 **Request:** `DELETE /api/applications/abc-123/files/resume`
 
 Behaviour:
+
 - Reads current Cosmos record to get the `blobUrl` for the given `fileType`
 - Returns 404 if no file of that type exists on the application
 - Deletes the blob from Blob Storage using the Function's storage connection string
@@ -755,13 +838,22 @@ Behaviour:
 **Response (200):**
 
 ```json
-{ "data": { "id": "abc-123", "fileType": "resume", "deleted": true }, "error": null }
+{
+  "data": { "id": "abc-123", "fileType": "resume", "deleted": true },
+  "error": null
+}
 ```
 
 **Response (404):**
 
 ```json
-{ "data": null, "error": { "code": "NOT_FOUND", "message": "No resume found for application abc-123" } }
+{
+  "data": null,
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "No resume found for application abc-123"
+  }
+}
 ```
 
 ---
@@ -821,6 +913,10 @@ job-tracker/
 - 2026-03-18: Completed design steps 1–3 (user flow, data model, API contract)
 - 2026-03-18: Added design rationale (why decisions were made for Steps 1–3), expanded API contract with full request/response examples, synced TIMELINE.md with current scope, removed stale data from TIMELINE.md
 - 2026-03-19: Reviewed and completed Step 3 (API contract) — resolved gaps: file replacement/overwrite behaviour, deleted app listing endpoint, individual file delete endpoint, stats exclusion of deleted apps, 401/403 via SWA gateway. Completed Step 4 (File Upload Architecture) — CORS, blob PUT headers, client-side validation, SAS issuance validation, processUpload fileType derivation, upload completion polling, failure handling, progress bar, concurrent uploads.
+- 2026-03-19: Completed Step 5 (Event-Driven Pipeline) — chose Blob Storage system topic, single Event Grid subscription, Event Grid Schema, Event Grid trigger binding, BlobCreated-only filtering, dead-letter container, and default retry policy with idempotent processUpload expectations.
+- 2026-03-19: Completed Step 6 (Authentication & Security) — locked SWA built-in GitHub auth, private owner-only route access, SWA gateway as auth enforcement boundary, no browser API keys or custom JWT flow in v1, and pragmatic in-function throttling for sensitive API endpoints without adding APIM.
+- 2026-03-19: Planned Step 7 (Infrastructure & Deployment) — locked IaC topology/resources, Bicep structure and outputs, deployment sequencing expectations, and explicitly gated Phase 1 execution pending planning-doc review.
+- 2026-03-19: Phase 1 started — created `infra/main.bicep` and `infra/parameters.json` with all resources: Cosmos DB (free tier, jobtracker/applications, /id partition key, 400 RU/s), Storage Account (LRS, 4 blob containers, CORS for SWA origin, 90-day lifecycle policy), Log Analytics + App Insights, Azure Functions (Consumption, Linux, Node.js 20), Static Web Apps (free tier) with linked backend, Event Grid system topic (subscription conditional on processUpload deployment). Bicep validated successfully.
 
 ---
 

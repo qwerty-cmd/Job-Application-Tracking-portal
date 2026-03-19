@@ -143,3 +143,88 @@ Each entry records what was done, on which machine, with which AI tool, and what
 **Blockers:** None
 
 **Next session:** Step 5 (Event-Driven Pipeline), Step 6 (Auth), Step 7 (Infra & Deployment). Then start Phase 1 (Bicep).
+
+---
+
+## 2026-03-19 — Home (GitHub Copilot) — Session 5
+
+**What was done:**
+
+- Completed Step 5 (Event-Driven Pipeline):
+  - Chose Blob Storage system topic (not custom topic)
+  - Single Event Grid subscription (not one per container) — processUpload filters by container name
+  - Event Grid Schema (not CloudEvents 1.0) — Azure-only project, simpler
+  - Event Grid trigger binding (not HTTP webhook) — removes manual subscription validation
+  - BlobCreated-only filter — excludes delete events from lifecycle policy
+  - Dead-letter to dedicated `deadletter` blob container for inspection/replay
+  - Default retry policy: 30 attempts, 24-hour TTL
+  - Idempotency via "latest wins" timestamp + "blob not found = success" on retries
+
+- Completed Step 6 (Authentication & Security):
+  - SWA built-in GitHub provider (no custom identity)
+  - Private app with custom `owner` role (not just `authenticated`)
+  - SWA gateway enforces 401/403 before Functions execute
+  - No API keys for browser-to-API auth — SWA manages session/client principal
+  - No custom JWT issuance/validation in v1
+  - No API Management in v1 — targeted in-function throttling for sensitive endpoints
+  - Defence in depth: Functions still validate payloads/business rules
+
+- Completed Step 7 (Infrastructure & Deployment — planning only):
+  - Locked IaC topology: SWA + Functions + Cosmos + Storage + Event Grid
+  - Bicep structure: `infra/main.bicep` + `infra/parameters.json`
+  - 4 blob containers: `resumes`, `coverletters`, `jobdescriptions`, `deadletter`
+  - Required outputs: SWA hostname, Function app name, Cosmos endpoint, Storage account name
+  - Explicitly gated: no Phase 1 execution until planning docs vetted
+
+- Cross-document gap analysis (CLAUDE.md, DEVLOG.md, TIMELINE.md):
+  - Found 15 issues (4 Critical, 4 High, 4 Medium, 3 Low)
+  - Fixed all 15: stale TIMELINE.md references, processUpload step ordering, missing validation rules, inconsistent response examples, effort estimate updates, moved auth from Phase 6 to Phase 1
+
+**Decisions made:**
+
+- Event Grid Schema over CloudEvents (Azure-only, simpler docs alignment)
+- System topic + single subscription (not custom topic, not per-container)
+- SWA built-in auth enforced at gateway (not in Functions)
+- No APIM/JWT/API keys in v1 (owner-only access is sufficient)
+- Step 7 is planning-only — Phase 1 gated behind planning review
+
+**Blockers:** None
+
+**Next session:** Final planning review, then start Phase 1 (Bicep infrastructure).
+
+---
+
+## 2026-03-19 — Work Laptop (GitHub Copilot) — Session 6
+
+**What was done:**
+
+- Phase 1 started — created Bicep infrastructure templates
+- Created `infra/main.bicep` with all resources:
+  - Cosmos DB (free tier, Session consistency, database `jobtracker`, container `applications`, partition key `/id`, 400 RU/s)
+  - Storage Account (Standard_LRS, TLS 1.2, no public blob access)
+  - Blob Service with CORS (SWA origin only, PUT/GET/HEAD)
+  - 4 blob containers: `resumes`, `coverletters`, `jobdescriptions`, `deadletter`
+  - Lifecycle policy: 90-day TTL on app blob containers
+  - Log Analytics Workspace + Application Insights
+  - App Service Plan (Consumption/Y1, Linux)
+  - Function App (Node.js 20, Functions v4, all app settings: Cosmos, Storage, App Insights)
+  - Azure Static Web Apps (Free tier)
+  - SWA linked backend to Function App
+  - Event Grid system topic from Storage
+  - Event Grid subscription (conditional, BlobCreated filter with advanced subject filtering for upload containers, dead-letter to `deadletter` container, 30 retries / 24hr TTL)
+- Created `infra/parameters.json` with environment values
+- Bicep validated successfully (`az bicep build` — exit code 0, no errors)
+- Updated CLAUDE.md status and recent work
+
+**Decisions made:**
+
+- Linux over Windows for Function App (better Node.js support)
+- Event Grid subscription is conditional (`deployEventGridSubscription` param) — deploy after processUpload function exists
+- Advanced subject filters on Event Grid subscription (limit to 3 upload containers only, exclude Functions runtime blobs)
+- Storage account name uses `uniqueString` suffix for global uniqueness
+- CORS on blob service references specific SWA hostname (not wildcard)
+- All Function App settings configured in Bicep (Cosmos, Storage, App Insights env vars)
+
+**Blockers:** None
+
+**Next session:** Deploy infrastructure to Azure (`az deployment group create`), verify outputs, then start Phase 2 (Backend API).
