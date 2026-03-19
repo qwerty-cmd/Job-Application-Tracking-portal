@@ -228,3 +228,54 @@ Each entry records what was done, on which machine, with which AI tool, and what
 **Blockers:** None
 
 **Next session:** Deploy infrastructure to Azure (`az deployment group create`), verify outputs, then start Phase 2 (Backend API).
+
+---
+
+## 2026-03-19 — Home (Claude Code) — Session 7
+
+**What was done:**
+
+- Installed Azure CLI (2.84.0) and Azure Functions Core Tools (4.8.0)
+- Logged into Azure, created resource group `job-tracker-rg` in `australiaeast`
+- Ran `az deployment group what-if` — 17 resources validated, all correct
+- Attempted full deploy — failed on `Microsoft.Web/staticSites/swa-jobtracker/linkedBackends/backend` with error: `SkuCode 'Free' is invalid`
+- Root cause: SWA Free tier does not support `linkedBackends` (linking an external Function App); this is a Standard-tier-only feature
+- Decision: remove linked backend, keep SWA Free, enforce auth inside each Function using `x-ms-client-principal` header — same security outcome, zero extra cost
+- Updated CLAUDE.md to reflect the revised auth model:
+  - Decisions Made: replaced gateway enforcement decision with Function-level enforcement + noted SWA linked backend removal
+  - Step 6 rationale: replaced "Gateway-enforced authorization" point with "Function-level auth" point explaining the tradeoff
+  - Step 7 rationale: updated "Separate SWA and Functions resources" note to record the linked backend removal and its cause
+  - HTTP status codes table: updated 401/403 descriptions to reference Function auth guard
+  - Step 3 rationale: updated 401/403 note to reference `requireOwner()` helper
+
+**Decisions made:**
+
+- No SWA linked backend — SWA Free tier limitation discovered during deployment
+- Auth enforcement in Functions via `x-ms-client-principal` header + `requireOwner()` shared helper in `api/shared/auth.ts`
+- 401/403 returned by Functions, not by SWA gateway
+
+**Blockers:** None — 8 of 9 resources deployed successfully (Cosmos, Storage, Log Analytics, App Insights, App Service Plan, Function App, SWA, Event Grid topic). Only linked backend skipped.
+
+**Next session:** Remove `swaLinkedBackend` resource from `infra/main.bicep`, redeploy to confirm clean deployment, verify outputs, then start Phase 2 (Backend API).
+
+---
+
+## 2026-03-19 — Home (Claude Code) — Session 8
+
+**What was done:**
+
+- Removed `swaLinkedBackend` resource from `infra/main.bicep` (replaced with explanatory comment)
+- Redeployed — `provisioningState: Succeeded`, 16 resources, no errors
+- Verified deployment outputs:
+  - SWA hostname: `gray-rock-0c358e300.1.azurestaticapps.net`
+  - Function App: `func-jobtracker`
+  - Cosmos endpoint: `https://cosmos-jobtracker.documents.azure.com:443/`
+  - Storage account: `stjobtrackermliokt`
+  - Event Grid topic: `evgt-jobtracker`
+- Phase 1 marked complete in CLAUDE.md
+
+**Decisions made:** None new — executed the linked backend removal decided in Session 7.
+
+**Blockers:** None
+
+**Next session:** Phase 2 — Backend API. Scaffold `api/` directory, implement Azure Functions for all CRUD endpoints, file upload/download SAS token endpoints, and `api/shared/auth.ts` requireOwner helper.
