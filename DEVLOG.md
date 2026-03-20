@@ -279,3 +279,41 @@ Each entry records what was done, on which machine, with which AI tool, and what
 **Blockers:** None
 
 **Next session:** Phase 2 — Backend API. Scaffold `api/` directory, implement Azure Functions for all CRUD endpoints, file upload/download SAS token endpoints, and `api/shared/auth.ts` requireOwner helper.
+
+---
+
+## 2026-03-21 — Work (VS Code Copilot) — Session 9
+
+**What was done:**
+
+- Scaffolded `api/` project: Azure Functions v4, Node.js 20, TypeScript, ESM modules, Vitest
+- Created project config: `package.json`, `tsconfig.json`, `tsconfig.test.json`, `vitest.config.ts`, `host.json`, `.gitignore`
+- Created shared utilities in `api/src/shared/`:
+  - `auth.ts` — `decodeClientPrincipal()` and `requireOwner()` for SWA auth
+  - `cosmosClient.ts` — singleton Cosmos DB container accessor
+  - `response.ts` — `successResponse()`, `errorResponse()`, `validationError()`, `notFoundError()`, `serverError()`
+  - `types.ts` — all domain types, enums, interfaces (`Application`, `Interview`, `ApplicationSummary`, `StatsResponse`)
+  - `validation.ts` — all validation functions for create/update application, create/update interview, SAS token requests
+- Implemented 12 CRUD endpoints with TDD (184 tests, all passing):
+  - `createApplication` — POST, 30 tests
+  - `getApplication` — GET by ID with blobUrl stripping, 10 tests
+  - `listApplications` — GET with filters/pagination/sorting, 15 tests
+  - `updateApplication` — PATCH partial update, 16 tests
+  - `deleteApplication` — soft DELETE, 7 tests
+  - `restoreApplication` — PATCH restore, 7 tests
+  - `listDeleted` — GET deleted summaries, 7 tests
+  - `getStats` — GET stats with date range aggregation, 16 tests
+  - `addInterview` — POST with auto-status update, 27 tests
+  - `updateInterview` — PATCH partial interview update, 18 tests
+  - `deleteInterview` — DELETE with round renumbering, 13 tests
+  - `reorderInterviews` — PATCH reorder with validation, 18 tests
+- Fixed TypeScript errors: `.js` → `.ts` in test imports, `parseBody` type widening, `Interview` type casts in updateInterview
+
+**Decisions made:**
+- Test imports use `.ts` extension (vitest resolves directly), production imports use `.js` (Node16 ESM convention)
+- `tsconfig.test.json` extends main config but includes test files for IDE type-checking
+- `parseBody` helper in tests uses `{ body?: unknown }` to match `HttpResponseInit.body`
+
+**Blockers:** None — all 184 tests pass across 12 files.
+
+**Next session:** Continue Phase 2 — implement SAS token upload/download endpoints, file delete endpoint, and `processUpload` Event Grid trigger function.
