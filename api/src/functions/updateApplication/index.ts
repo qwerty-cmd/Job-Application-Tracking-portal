@@ -8,19 +8,47 @@ import { requireOwner } from "../../shared/auth.js";
 import { getContainer } from "../../shared/cosmosClient.js";
 import {
   successResponse,
+  errorResponse,
   notFoundError,
   validationError,
   serverError,
+  stripBlobUrl,
 } from "../../shared/response.js";
-import { Application } from "../../shared/types.js";
+import {
+  Application,
+  Location,
+  Rejection,
+  WORK_MODES,
+  WorkMode,
+  REJECTION_REASONS,
+  RejectionReason,
+} from "../../shared/types.js";
 import { validateUpdateApplication } from "../../shared/validation.js";
 
-function stripBlobUrl(
-  file: Application["resume"],
-): Omit<NonNullable<Application["resume"]>, "blobUrl"> | null {
-  if (!file) return null;
-  const { blobUrl, ...rest } = file;
-  return rest;
+/** Sanitize location to only known fields */
+function sanitizeLocation(loc: unknown): Location | null {
+  if (!loc || typeof loc !== "object") return null;
+  const raw = loc as Record<string, unknown>;
+  return {
+    city: typeof raw.city === "string" ? raw.city : "",
+    country: typeof raw.country === "string" ? raw.country : "",
+    workMode: WORK_MODES.includes(raw.workMode as WorkMode)
+      ? (raw.workMode as WorkMode)
+      : "Remote",
+    other: typeof raw.other === "string" ? raw.other : null,
+  };
+}
+
+/** Sanitize rejection to only known fields */
+function sanitizeRejection(rej: unknown): Rejection | null {
+  if (!rej || typeof rej !== "object") return null;
+  const raw = rej as Record<string, unknown>;
+  if (!raw.reason || !REJECTION_REASONS.includes(raw.reason as RejectionReason))
+    return null;
+  return {
+    reason: raw.reason as RejectionReason,
+    notes: typeof raw.notes === "string" ? raw.notes : "",
+  };
 }
 
 async function updateApplication(
@@ -38,7 +66,16 @@ async function updateApplication(
       return notFoundError(`Application ${id} not found`);
     }
 
-    const body = (await req.json()) as Record<string, unknown>;
+    let body: Record<string, unknown>;
+    try {
+      body = (await req.json()) as Record<string, unknown>;
+    } catch {
+      return errorResponse(
+        400,
+        "INVALID_BODY",
+        "Request body must be valid JSON",
+      );
+    }
 
     // Business rule: if setting status to Rejected and body doesn't include
     // rejection.reason, but the existing record already has one, carry it forward
@@ -60,21 +97,50 @@ async function updateApplication(
       return validationError(errors);
     }
 
+    // Whitelist updatable fields to prevent mass assignment
+    const UPDATABLE_FIELDS = [
+      "company",
+      "role",
+      "dateApplied",
+      "status",
+      "jobPostingUrl",
+      "jobDescriptionText",
+    ] as const;
+    const sanitized: Record<string, unknown> = {};
+    for (const key of UPDATABLE_FIELDS) {
+      if (key in body) sanitized[key] = body[key];
+    }
+    // Sanitize nested objects to strip unknown fields
+    if ("location" in body) {
+      sanitized.location = sanitizeLocation(body.location);
+    }
+    if ("rejection" in body) {
+      sanitized.rejection = sanitizeRejection(body.rejection);
+    }
+
     const merged = {
       ...resource,
-      ...body,
+      ...sanitized,
       updatedAt: new Date().toISOString(),
     };
+
+    // Post-merge invariant: if status is Rejected, rejection.reason must exist
+    if (merged.status === "Rejected" && !merged.rejection?.reason) {
+      return validationError([
+        {
+          field: "rejection.reason",
+          message: "Required when status is Rejected",
+        },
+      ]);
+    }
 
     await getContainer().item(id, id).replace(merged);
 
     const response = {
       ...merged,
-      resume: stripBlobUrl(merged.resume as Application["resume"]),
-      coverLetter: stripBlobUrl(merged.coverLetter as Application["resume"]),
-      jobDescriptionFile: stripBlobUrl(
-        merged.jobDescriptionFile as Application["resume"],
-      ),
+      resume: stripBlobUrl(merged.resume),
+      coverLetter: stripBlobUrl(merged.coverLetter),
+      jobDescriptionFile: stripBlobUrl(merged.jobDescriptionFile),
     };
 
     return successResponse(response);
