@@ -8,20 +8,14 @@ import { requireOwner } from "../../shared/auth.js";
 import { getContainer } from "../../shared/cosmosClient.js";
 import {
   successResponse,
+  errorResponse,
   notFoundError,
   serverError,
   validationError,
+  stripBlobUrl,
 } from "../../shared/response.js";
 import { Application, Interview } from "../../shared/types.js";
 import { validateUpdateInterview } from "../../shared/validation.js";
-
-function stripBlobUrl(
-  file: Application["resume"],
-): Omit<NonNullable<Application["resume"]>, "blobUrl"> | null {
-  if (!file) return null;
-  const { blobUrl, ...rest } = file;
-  return rest;
-}
 
 async function updateInterview(
   req: HttpRequest,
@@ -36,7 +30,16 @@ async function updateInterview(
     const interviewId = req.params.interviewId;
 
     // 2. Parse request body
-    const body = (await req.json()) as Record<string, unknown>;
+    let body: Record<string, unknown>;
+    try {
+      body = (await req.json()) as Record<string, unknown>;
+    } catch {
+      return errorResponse(
+        400,
+        "INVALID_BODY",
+        "Request body must be valid JSON",
+      );
+    }
 
     // 3. Validate
     const errors = validateUpdateInterview(body);
