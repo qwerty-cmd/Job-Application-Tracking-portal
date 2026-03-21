@@ -400,6 +400,25 @@ describe("updateInterview", () => {
       const details = error.details as Array<Record<string, unknown>>;
       expect(details.some((d) => d.field === "reflection")).toBe(true);
     });
+
+    it("should return 400 when request body is not valid JSON", async () => {
+      const req = new HttpRequest({
+        method: "PATCH",
+        url: "http://localhost/api/applications/app-001/interviews/int-001",
+        params: { id: "app-001", interviewId: "int-001" },
+        headers: { "Content-Type": "application/json" },
+        body: { string: "not valid json{{{" },
+      });
+      const res = await handler(req, createContext());
+
+      expect(res.status).toBe(400);
+      const body = parseBody(res);
+      expect(body.data).toBeNull();
+      expect(body.error).toMatchObject({
+        code: "INVALID_BODY",
+        message: "Request body must be valid JSON",
+      });
+    });
   });
 
   // =========================================================================
