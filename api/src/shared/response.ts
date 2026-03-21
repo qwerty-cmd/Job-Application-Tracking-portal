@@ -50,3 +50,18 @@ export function serverError(
 ): HttpResponseInit {
   return errorResponse(500, "INTERNAL_ERROR", message);
 }
+
+/**
+ * Strip blobUrl from a file metadata object before returning in API responses.
+ * blobUrl is internal — clients use the download SAS token endpoint instead.
+ */
+export function stripBlobUrl(
+  file: { blobUrl: string; fileName: string; uploadedAt: string } | null,
+): Omit<
+  { blobUrl: string; fileName: string; uploadedAt: string },
+  "blobUrl"
+> | null {
+  if (!file) return null;
+  const { blobUrl, ...rest } = file;
+  return rest;
+}

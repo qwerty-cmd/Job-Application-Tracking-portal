@@ -5,7 +5,7 @@
 // Returns 401 if missing/invalid, 403 if authenticated but missing 'owner' role.
 // See CLAUDE.md: "requireOwner() helper in api/shared/auth.ts"
 
-import { HttpRequest } from '@azure/functions';
+import { HttpRequest, HttpResponseInit } from "@azure/functions";
 
 export interface ClientPrincipal {
   identityProvider: string;
@@ -18,14 +18,16 @@ export interface ClientPrincipal {
  * Decodes the x-ms-client-principal header from Azure SWA.
  * Returns null if the header is absent or cannot be decoded.
  */
-export function decodeClientPrincipal(req: HttpRequest): ClientPrincipal | null {
-  const header = req.headers.get('x-ms-client-principal');
+export function decodeClientPrincipal(
+  req: HttpRequest,
+): ClientPrincipal | null {
+  const header = req.headers.get("x-ms-client-principal");
   if (!header) {
     return null;
   }
 
   try {
-    const decoded = Buffer.from(header, 'base64').toString('utf-8');
+    const decoded = Buffer.from(header, "base64").toString("utf-8");
     const principal = JSON.parse(decoded) as ClientPrincipal;
 
     if (!principal.userRoles || !Array.isArray(principal.userRoles)) {
@@ -40,27 +42,29 @@ export function decodeClientPrincipal(req: HttpRequest): ClientPrincipal | null 
 
 /**
  * Validates that the request has a valid SWA session with the 'owner' role.
- * Returns null if authorized, or an object with status and body for the error response.
+ * Returns null if authorized, or an HttpResponseInit for the error response.
  */
-export function requireOwner(req: HttpRequest): { status: number; body: string } | null {
+export function requireOwner(req: HttpRequest): HttpResponseInit | null {
   const principal = decodeClientPrincipal(req);
 
   if (!principal) {
     return {
       status: 401,
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         data: null,
-        error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
+        error: { code: "UNAUTHORIZED", message: "Authentication required" },
       }),
     };
   }
 
-  if (!principal.userRoles.includes('owner')) {
+  if (!principal.userRoles.includes("owner")) {
     return {
       status: 403,
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         data: null,
-        error: { code: 'FORBIDDEN', message: 'Owner role required' },
+        error: { code: "FORBIDDEN", message: "Owner role required" },
       }),
     };
   }
