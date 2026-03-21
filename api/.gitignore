@@ -3,3 +3,5 @@ dist/
 local.settings.json
 .env
 coverage/
+.vscode/
+run
