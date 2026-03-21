@@ -11,14 +11,11 @@
   },
   "dependencies": {
     "@azure/cosmos": "^4.2.0",
-    "@azure/data-tables": "^13.3.0",
-    "@azure/storage-blob": "^12.26.0",
-    "uuid": "^11.1.0"
+    "@azure/storage-blob": "^12.26.0"
   },
   "devDependencies": {
     "@azure/functions": "^4.6.0",
     "@types/node": "^20.17.0",
-    "@types/uuid": "^10.0.0",
     "typescript": "^5.7.0",
     "vitest": "^3.1.0"
   }
