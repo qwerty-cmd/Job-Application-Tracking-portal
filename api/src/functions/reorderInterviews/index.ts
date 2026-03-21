@@ -8,19 +8,14 @@ import { requireOwner } from "../../shared/auth.js";
 import { getContainer } from "../../shared/cosmosClient.js";
 import {
   successResponse,
+  errorResponse,
   notFoundError,
   serverError,
   validationError,
+  stripBlobUrl,
 } from "../../shared/response.js";
 import { Application } from "../../shared/types.js";
-
-function stripBlobUrl(
-  file: Application["resume"],
-): Omit<NonNullable<Application["resume"]>, "blobUrl"> | null {
-  if (!file) return null;
-  const { blobUrl, ...rest } = file;
-  return rest;
-}
+import { validateReorderRequest } from "../../shared/validation.js";
 
 async function reorderInterviews(
   req: HttpRequest,
@@ -34,9 +29,18 @@ async function reorderInterviews(
     const id = req.params.id;
 
     // 2. Parse request body
-    const body = (await req.json()) as Record<string, unknown>;
+    let body: Record<string, unknown>;
+    try {
+      body = (await req.json()) as Record<string, unknown>;
+    } catch {
+      return errorResponse(
+        400,
+        "INVALID_BODY",
+        "Request body must be valid JSON",
+      );
+    }
 
-    // 3. Validate order array
+    // 3. Validate order array (basic type check before Cosmos read)
     if (!body.order || !Array.isArray(body.order)) {
       return validationError([
         { field: "order", message: "Must be an array of interview IDs" },
@@ -59,34 +63,11 @@ async function reorderInterviews(
       return notFoundError(`Application ${id} not found`);
     }
 
-    // 5. Validate: all IDs must exist, no extras, no duplicates
-    const existingIds = new Set(resource.interviews.map((i) => i.id));
-    const providedIds = new Set(orderIds);
-
-    if (providedIds.size !== orderIds.length) {
-      return validationError([
-        { field: "order", message: "Duplicate interview IDs" },
-      ]);
-    }
-
-    if (orderIds.length !== existingIds.size) {
-      return validationError([
-        {
-          field: "order",
-          message: "Must contain all interview IDs (no partial reorder)",
-        },
-      ]);
-    }
-
-    for (const oid of orderIds) {
-      if (!existingIds.has(oid)) {
-        return validationError([
-          {
-            field: "order",
-            message: `Interview ID ${oid} not found on this application`,
-          },
-        ]);
-      }
+    // 5. Validate order against existing interviews using shared validator
+    const existingIds = resource.interviews.map((i) => i.id);
+    const reorderErrors = validateReorderRequest(body, existingIds);
+    if (reorderErrors.length > 0) {
+      return validationError(reorderErrors);
     }
 
     // 6. Update order fields
