@@ -18,13 +18,13 @@ Auth:      Azure SWA built-in (GitHub provider)
 
 - [x] Phase 0: Architecture & Design — **complete**
 - [x] Phase 1: Infrastructure (Bicep) — **complete (deployed to Azure, all 16 resources live)**
-- [ ] Phase 2: Backend API (CRUD Functions)
+- [x] Phase 2: Backend API (CRUD Functions) — **complete (all 16 endpoints + processUpload trigger, 220+ tests)**
 - [ ] Phase 3: Event Streaming Pipeline
 - [ ] Phase 4: Frontend (React)
 - [ ] Phase 5: CI/CD & Deployment
 - [ ] Phase 6: Polish & Showcase-Ready
 
-**Currently working on:** Phase 2 — Backend API (Azure Functions CRUD + file upload/download endpoints).
+**Currently working on:** Phase 3 — Event Streaming Pipeline (Event Grid subscription deployment, end-to-end upload flow testing).
 
 ## Design Steps Tracker
 
@@ -133,7 +133,7 @@ Auth:      Azure SWA built-in (GitHub provider)
 - **processUpload skips soft-deleted applications:** Between SAS issuance (which validates the app exists) and processUpload execution, the application could be soft-deleted. Processing an upload for a deleted app would create an inconsistency. Skipping it is safe — the orphaned blob is caught by the 90-day lifecycle policy.
 - **Event Grid retry + processUpload idempotency:** Event Grid retries failed deliveries with exponential backoff for up to 24 hours. processUpload must be idempotent — treating "blob not found" on old blob deletion as a success (not an error) ensures retries don't fail on already-cleaned-up state.
 - **Server-side content validation via magic bytes:** File extension checks alone are trivially bypassed. Since this is a public app, processUpload reads the first few bytes of the blob and validates against known signatures (PDF: `%PDF`, DOCX: `PK`/ZIP, HTML: `<!DOCTYPE`/`<html`). If content doesn't match, the blob is deleted and Cosmos is not updated. This is ~10 lines of code with no new dependencies.
-- **SAS token `Content-Length` constraint + processUpload size check (defence in depth):** The SAS token limits `Content-Length` to 10 MB (10485760 bytes) at the storage layer. processUpload also checks blob size after upload and deletes oversized blobs. Client-side validation is the first gate, SAS constraint is the second, processUpload is the third.
+- **processUpload size check as primary server-side enforcement (defence in depth):** Azure Block Blob SAS tokens do not natively support `Content-Length` constraints. Client-side validation is the first gate (extension + size check before SAS request), processUpload checks blob size after upload and deletes oversized blobs as the server-side enforcement. Two layers: client-side validation, then processUpload size check.
 - **`XMLHttpRequest` for progress over fetch:** `fetch` doesn't expose upload progress natively in all browsers. `XMLHttpRequest.upload.onprogress` is well-supported and straightforward for a single PUT.
 - **Atomic blob PUT means no partial recovery needed:** Files under 256 MB use a single-block PUT — it either succeeds or fails entirely. No multipart cleanup required.
 
@@ -318,17 +318,17 @@ Statuses: `Applying → Application Submitted → Recruiter Screening → Interv
 
 ### HTTP Status Codes Used
 
-| Code | Meaning                | When Used                                                                     |
-| ---- | ---------------------- | ----------------------------------------------------------------------------- |
-| 200  | OK                     | Successful GET, PATCH, DELETE                                                 |
-| 201  | Created                | Successful POST                                                               |
-| 400  | Bad Request            | Validation failed (missing fields, invalid enum)                              |
+| Code | Meaning                | When Used                                                                                            |
+| ---- | ---------------------- | ---------------------------------------------------------------------------------------------------- |
+| 200  | OK                     | Successful GET, PATCH, DELETE                                                                        |
+| 201  | Created                | Successful POST                                                                                      |
+| 400  | Bad Request            | Validation failed (missing fields, invalid enum)                                                     |
 | 401  | Unauthorized           | No valid session — `x-ms-client-principal` header absent or invalid, returned by Function auth guard |
-| 403  | Forbidden              | Authenticated but missing `owner` role — returned by Function auth guard      |
-| 404  | Not Found              | Application/interview ID doesn't exist or is soft-deleted                     |
-| 413  | Payload Too Large      | File exceeds 10 MB                                                            |
-| 415  | Unsupported Media Type | File type not PDF/DOCX/HTML                                                   |
-| 500  | Internal Server Error  | Unexpected failure                                                            |
+| 403  | Forbidden              | Authenticated but missing `owner` role — returned by Function auth guard                             |
+| 404  | Not Found              | Application/interview ID doesn't exist or is soft-deleted                                            |
+| 413  | Payload Too Large      | File exceeds 10 MB                                                                                   |
+| 415  | Unsupported Media Type | File type not PDF/DOCX/HTML                                                                          |
+| 500  | Internal Server Error  | Unexpected failure                                                                                   |
 
 ### API Response Shape (all endpoints)
 
@@ -363,7 +363,7 @@ Statuses: `Applying → Application Submitted → Recruiter Screening → Interv
 - Interview `outcome` required, must be: Passed, Failed, Pending, Cancelled
 - Interview `interviewers` max 500 chars
 - Interview `notes` and `reflection` max 10,000 chars
-- SAS token: 5-minute expiry, scoped to single blob, `Content-Length` limited to 10 MB (10485760 bytes) via SAS `Content-Length` constraint; processUpload also checks blob size and deletes if > 10 MB (defence in depth)
+- SAS token: 5-minute expiry, scoped to single blob; Azure Block Blob SAS does not support `Content-Length` constraints — processUpload checks blob size and deletes if > 10 MB (server-side enforcement); client-side validation is the first gate
 - File names must end in `.pdf`, `.docx`, or `.html` (JD only)
 - `contentType` must match file extension: `.pdf` → `application/pdf`, `.docx` → `application/vnd.openxmlformats-officedocument.wordprocessingml.document`, `.html` → `text/html`
 - File content validated server-side by processUpload via magic bytes: PDF (`%PDF`), DOCX (`PK`/ZIP), HTML (`<!DOCTYPE` or `<html`); mismatched content → blob deleted, Cosmos not updated, returns 415
@@ -920,7 +920,10 @@ job-tracker/
 - 2026-03-19: Phase 1 started — created `infra/main.bicep` and `infra/parameters.json` with all resources: Cosmos DB (free tier, jobtracker/applications, /id partition key, 400 RU/s), Storage Account (LRS, 4 blob containers, CORS for SWA origin, 90-day lifecycle policy), Log Analytics + App Insights, Azure Functions (Consumption, Linux, Node.js 20), Static Web Apps (free tier), Event Grid system topic (subscription conditional on processUpload deployment). Bicep validated successfully.
 - 2026-03-19: Architecture decision — removed SWA linked backend. SWA Free tier does not support linking external Function Apps (`SkuCode 'Free' is invalid` error on deploy). Auth enforcement moved from SWA gateway to a shared `requireOwner()` helper in each Function, validating the `x-ms-client-principal` header. Updated CLAUDE.md and DEVLOG.md. Bicep updated to remove `swaLinkedBackend` resource.
 - 2026-03-19: Phase 1 complete — full infrastructure deployed to Azure (16 resources). Outputs: SWA `gray-rock-0c358e300.1.azurestaticapps.net`, Function App `func-jobtracker`, Cosmos `https://cosmos-jobtracker.documents.azure.com:443/`, Storage `stjobtrackermliokt`, Event Grid topic `evgt-jobtracker`.
-- 2026-03-21: Phase 2 started — scaffolded `api/` project (Azure Functions v4, Node.js 20, TypeScript, ESM, Vitest). Created shared utilities: `auth.ts` (requireOwner), `cosmosClient.ts` (singleton), `response.ts` (standard shapes), `types.ts` (domain types/enums), `validation.ts` (all validators). Implemented all 12 CRUD endpoints with TDD (184 tests, all passing): createApplication, getApplication, listApplications, updateApplication, deleteApplication, restoreApplication, listDeleted, getStats, addInterview, updateInterview, deleteInterview, reorderInterviews. Remaining for Phase 2: SAS token upload/download endpoints, file delete endpoint, processUpload Event Grid trigger.
+- 2026-03-21: Phase 2 started — scaffolded `api/` project (Azure Functions v4, Node.js 20, TypeScript, ESM, Vitest). Created shared utilities: `auth.ts` (requireOwner), `cosmosClient.ts` (singleton), `response.ts` (standard shapes), `types.ts` (domain types/enums), `validation.ts` (all validators). Implemented all 12 CRUD endpoints with TDD (184 tests, all passing): createApplication, getApplication, listApplications, updateApplication, deleteApplication, restoreApplication, listDeleted, getStats, addInterview, updateInterview, deleteInterview, reorderInterviews.
+- 2026-03-21: Completed remaining Phase 2 endpoints: uploadSasToken (POST /api/upload/sas-token), downloadSasToken (GET /api/download/sas-token), deleteFile (DELETE /api/applications/:id/files/:fileType), processUpload (Event Grid trigger). All with full test coverage.
+- 2026-03-21: Full Phase 2 code review — fixed critical mass assignment vulnerability in updateApplication (field whitelisting), added Content-Type header to auth error responses, handled invalid JSON body as 400 (not 500) across 6 endpoints, added STORAGE_ACCOUNT_KEY to local.settings.json, fixed processUpload stream API to use Node.js streams instead of Web API, documented SAS Content-Length constraint gap in CLAUDE.md, updated SOLUTION.md auth model to reflect Function-level enforcement. Removed unused deps (@azure/data-tables, uuid, @types/uuid). Added tests for mass assignment prevention, invalid JSON body handling, and rejection clearing edge case.
+- 2026-03-21: Phase 2 second review — fixed remaining Medium/Low issues: M-1 (force initial status "Applying"), M-2 (post-merge rejection invariant check), M-3 (safety comment on ORDER BY interpolation), M-4 (sanitize nested location/rejection objects). Extracted shared utilities: `stripBlobUrl()` to response.ts, `FILE_TYPE_TO_FIELD`/`FILE_TYPE_CONTAINERS`/`VALID_FILE_TYPES_SET` to types.ts, new `storageClient.ts` singleton (mirrors cosmosClient.ts pattern). Removed duplicated constants/helpers from 7+ endpoint files. Updated createApplication tests for forced status. Created `docs/reviews/phase-2-code-review.md` documenting all issues and fixes.
 
 ---
 
