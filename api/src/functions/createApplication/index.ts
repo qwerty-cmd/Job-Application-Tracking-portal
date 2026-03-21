@@ -9,10 +9,45 @@ import { getContainer } from "../../shared/cosmosClient.js";
 import { validateCreateApplication } from "../../shared/validation.js";
 import {
   successResponse,
+  errorResponse,
   validationError,
   serverError,
 } from "../../shared/response.js";
-import { Application } from "../../shared/types.js";
+import {
+  Application,
+  Location,
+  Rejection,
+  WORK_MODES,
+  WorkMode,
+  REJECTION_REASONS,
+  RejectionReason,
+} from "../../shared/types.js";
+
+/** Sanitize location to only known fields */
+function sanitizeLocation(loc: unknown): Location | null {
+  if (!loc || typeof loc !== "object") return null;
+  const raw = loc as Record<string, unknown>;
+  return {
+    city: typeof raw.city === "string" ? raw.city : "",
+    country: typeof raw.country === "string" ? raw.country : "",
+    workMode: WORK_MODES.includes(raw.workMode as WorkMode)
+      ? (raw.workMode as WorkMode)
+      : "Remote",
+    other: typeof raw.other === "string" ? raw.other : null,
+  };
+}
+
+/** Sanitize rejection to only known fields */
+function sanitizeRejection(rej: unknown): Rejection | null {
+  if (!rej || typeof rej !== "object") return null;
+  const raw = rej as Record<string, unknown>;
+  if (!raw.reason || !REJECTION_REASONS.includes(raw.reason as RejectionReason))
+    return null;
+  return {
+    reason: raw.reason as RejectionReason,
+    notes: typeof raw.notes === "string" ? raw.notes : "",
+  };
+}
 
 async function createApplication(
   req: HttpRequest,
@@ -24,7 +59,16 @@ async function createApplication(
 
   try {
     // 2. Parse body
-    const body = (await req.json()) as Record<string, unknown>;
+    let body: Record<string, unknown>;
+    try {
+      body = (await req.json()) as Record<string, unknown>;
+    } catch {
+      return errorResponse(
+        400,
+        "INVALID_BODY",
+        "Request body must be valid JSON",
+      );
+    }
 
     // 3. Validate
     const errors = validateCreateApplication(body);
@@ -32,22 +76,20 @@ async function createApplication(
 
     // 4. Build document
     const now = new Date().toISOString();
-    const location = body.location !== undefined ? body.location : null;
-    const rejection = body.rejection !== undefined ? body.rejection : null;
 
     const doc: Application = {
       id: crypto.randomUUID(),
       company: body.company as string,
       role: body.role as string,
-      location: location as Application["location"],
+      location: sanitizeLocation(body.location),
       dateApplied: body.dateApplied as string,
       jobPostingUrl: (body.jobPostingUrl as string) ?? null,
       jobDescriptionText: (body.jobDescriptionText as string) ?? null,
       jobDescriptionFile: null,
-      status: (body.status as Application["status"]) ?? "Applying",
+      status: "Applying", // Initial status is always "Applying" per R1
       resume: null,
       coverLetter: null,
-      rejection: rejection as Application["rejection"],
+      rejection: sanitizeRejection(body.rejection),
       interviews: [],
       isDeleted: false,
       deletedAt: null,

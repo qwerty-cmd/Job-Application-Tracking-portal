@@ -188,7 +188,7 @@ describe("createApplication", () => {
       expect(location.other).toBeNull();
     });
 
-    it("should use status provided in request body when it is a valid value", async () => {
+    it("should force status to Applying regardless of provided status", async () => {
       const req = buildRequest({
         ...VALID_MINIMAL_BODY,
         status: "Application Submitted",
@@ -198,7 +198,7 @@ describe("createApplication", () => {
       expect(res.status).toBe(201);
       const body = parseBody(res);
       const app = body.data as Record<string, unknown>;
-      expect(app.status).toBe("Application Submitted");
+      expect(app.status).toBe("Applying");
     });
 
     it("should call Cosmos create with the generated document", async () => {
@@ -555,7 +555,7 @@ describe("createApplication", () => {
       expect(app.status).toBe("Applying");
     });
 
-    it("should allow status Rejected when valid rejection.reason is provided", async () => {
+    it("should store rejection data but force status to Applying when status Rejected is sent", async () => {
       const req = buildRequest({
         ...VALID_MINIMAL_BODY,
         status: "Rejected",
@@ -566,7 +566,7 @@ describe("createApplication", () => {
       expect(res.status).toBe(201);
       const body = parseBody(res);
       const app = body.data as Record<string, unknown>;
-      expect(app.status).toBe("Rejected");
+      expect(app.status).toBe("Applying");
       const rejection = app.rejection as Record<string, unknown>;
       expect(rejection.reason).toBe("Ghosted");
       expect(rejection.notes).toBe("No response after 2 weeks");
@@ -617,6 +617,24 @@ describe("createApplication", () => {
       const res = await handler(req, createContext());
 
       expect(res.status).toBe(201);
+    });
+
+    it("should return 400 when request body is not valid JSON", async () => {
+      const req = new HttpRequest({
+        method: "POST",
+        url: "http://localhost/api/applications",
+        headers: { "Content-Type": "application/json" },
+        body: { string: "not valid json{{{" },
+      });
+      const res = await handler(req, createContext());
+
+      expect(res.status).toBe(400);
+      const body = parseBody(res);
+      expect(body.data).toBeNull();
+      expect(body.error).toMatchObject({
+        code: "INVALID_BODY",
+        message: "Request body must be valid JSON",
+      });
     });
   });
 });
