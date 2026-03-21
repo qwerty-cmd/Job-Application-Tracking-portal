@@ -10,16 +10,9 @@ import {
   successResponse,
   notFoundError,
   serverError,
+  stripBlobUrl,
 } from "../../shared/response.js";
 import { Application } from "../../shared/types.js";
-
-function stripBlobUrl(
-  file: Application["resume"],
-): Omit<NonNullable<Application["resume"]>, "blobUrl"> | null {
-  if (!file) return null;
-  const { blobUrl, ...rest } = file;
-  return rest;
-}
 
 async function getApplication(
   req: HttpRequest,
