@@ -303,6 +303,10 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
           value: storageAccount.name
         }
         {
+          name: 'STORAGE_ACCOUNT_KEY'
+          value: storageAccount.listKeys().keys[0].value
+        }
+        {
           name: 'STORAGE_CONNECTION_STRING'
           value: 'DefaultEndpointsProtocol=https;AccountName=${storageAccount.name};EndpointSuffix=${environment().suffixes.storage};AccountKey=${storageAccount.listKeys().keys[0].value}'
         }

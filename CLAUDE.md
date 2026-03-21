@@ -18,13 +18,13 @@ Auth:      Azure SWA built-in (GitHub provider)
 
 - [x] Phase 0: Architecture & Design — **complete**
 - [x] Phase 1: Infrastructure (Bicep) — **complete (deployed to Azure, all 16 resources live)**
-- [x] Phase 2: Backend API (CRUD Functions) — **complete (all 16 endpoints + processUpload trigger, 220+ tests)**
-- [ ] Phase 3: Event Streaming Pipeline
+- [x] Phase 2: Backend API (CRUD Functions) — **complete (all 16 endpoints + processUpload trigger, 261 tests)**
+- [x] Phase 3: Event Streaming Pipeline — **complete (deployed, E2E verified, dead-letter configured)**
 - [ ] Phase 4: Frontend (React)
 - [ ] Phase 5: CI/CD & Deployment
 - [ ] Phase 6: Polish & Showcase-Ready
 
-**Currently working on:** Phase 3 — Event Streaming Pipeline (Event Grid subscription deployment, end-to-end upload flow testing).
+**Currently working on:** Phase 4 — Frontend (React + TypeScript with Vite).
 
 ## Design Steps Tracker
 
@@ -924,6 +924,7 @@ job-tracker/
 - 2026-03-21: Completed remaining Phase 2 endpoints: uploadSasToken (POST /api/upload/sas-token), downloadSasToken (GET /api/download/sas-token), deleteFile (DELETE /api/applications/:id/files/:fileType), processUpload (Event Grid trigger). All with full test coverage.
 - 2026-03-21: Full Phase 2 code review — fixed critical mass assignment vulnerability in updateApplication (field whitelisting), added Content-Type header to auth error responses, handled invalid JSON body as 400 (not 500) across 6 endpoints, added STORAGE_ACCOUNT_KEY to local.settings.json, fixed processUpload stream API to use Node.js streams instead of Web API, documented SAS Content-Length constraint gap in CLAUDE.md, updated SOLUTION.md auth model to reflect Function-level enforcement. Removed unused deps (@azure/data-tables, uuid, @types/uuid). Added tests for mass assignment prevention, invalid JSON body handling, and rejection clearing edge case.
 - 2026-03-21: Phase 2 second review — fixed remaining Medium/Low issues: M-1 (force initial status "Applying"), M-2 (post-merge rejection invariant check), M-3 (safety comment on ORDER BY interpolation), M-4 (sanitize nested location/rejection objects). Extracted shared utilities: `stripBlobUrl()` to response.ts, `FILE_TYPE_TO_FIELD`/`FILE_TYPE_CONTAINERS`/`VALID_FILE_TYPES_SET` to types.ts, new `storageClient.ts` singleton (mirrors cosmosClient.ts pattern). Removed duplicated constants/helpers from 7+ endpoint files. Updated createApplication tests for forced status. Created `docs/reviews/phase-2-code-review.md` documenting all issues and fixes.
+- 2026-03-21: Phase 3 complete — deployed Function App to Azure (all 16 functions), enabled Event Grid subscription, E2E verified full upload pipeline (SAS token → blob PUT → Event Grid → processUpload → Cosmos update), verified re-upload (latest wins), download SAS, and file delete. Fixed: missing STORAGE_ACCOUNT_KEY env var (added to Bicep), processUpload `getProperties()` crash on Event Grid retry (added 404 try/catch), function registration glob issue (created `src/index.ts` single entry point). Dead-letter configured and verified (deadletter container, 30 retries, 24hr TTL).
 
 ---
 

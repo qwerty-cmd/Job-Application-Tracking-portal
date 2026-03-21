@@ -15,7 +15,7 @@
       "value": true
     },
     "deployEventGridSubscription": {
-      "value": false
+      "value": true
     }
   }
 }

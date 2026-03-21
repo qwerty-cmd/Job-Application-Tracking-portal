@@ -377,3 +377,58 @@ Each entry records what was done, on which machine, with which AI tool, and what
 **Blockers:** None — all fixes applied. Need to run tests when Node.js is available to verify.
 
 **Next session:** Run tests to confirm all 230+ pass, then Phase 3 — Event Streaming Pipeline.
+
+---
+
+## 2026-03-21 — Work Laptop (GitHub Copilot)
+
+**What was done:**
+
+- Phase 3 (Event Streaming Pipeline) — complete
+- Ran full test suite: 261 tests pass across 16 files
+- Deployed Function App to Azure (`func-jobtracker`):
+  - Created `.funcignore` to exclude source/test files from deployment package
+  - Moved `@azure/functions` from devDependencies to dependencies (required at runtime)
+  - Fixed function registration: glob pattern `dist/functions/*/index.js` in package.json `main` field didn't resolve on Linux Consumption; created `src/index.ts` as single entry point importing all 16 functions, set `main: "dist/index.js"`
+  - All 16 functions deployed (15 HTTP + 1 Event Grid trigger)
+- Enabled Event Grid subscription (`deployEventGridSubscription: true` in parameters.json)
+- Deployed infrastructure update via `az deployment group create` — Event Grid subscription `process-upload` active
+- E2E upload pipeline verified end-to-end:
+  - Created test application via POST /api/applications
+  - Got SAS token via POST /api/upload/sas-token
+  - Uploaded PDF blob directly to Azure Storage via PUT
+  - Event Grid fired BlobCreated → processUpload triggered → Cosmos updated with resume metadata
+  - Verified GET /api/applications/:id shows resume fileName and uploadedAt
+- E2E re-upload verified:
+  - Uploaded second PDF with different filename
+  - processUpload updated Cosmos with new fileName/uploadedAt (latest wins)
+- E2E download verified:
+  - GET /api/download/sas-token returned read-only SAS URL
+  - Downloaded file content matched uploaded content
+- E2E file delete verified:
+  - DELETE /api/applications/:id/files/resume removed blob and nulled Cosmos field
+  - Second DELETE returned 404 (correct — no file to delete)
+- Fixed missing `STORAGE_ACCOUNT_KEY` environment variable:
+  - SAS token endpoints returned 500 because env var wasn't set
+  - Added via `az functionapp config appsettings set` (immediate fix)
+  - Updated `infra/main.bicep` to include STORAGE_ACCOUNT_KEY app setting (permanent fix)
+- Fixed processUpload bug — `getProperties()` crash on Event Grid retry:
+  - When a re-upload occurs, processUpload deletes the old blob;
+    if Event Grid retries the original upload's event, `getProperties()` throws 404
+  - Added try/catch around `getProperties()` — returns early on 404 with log message
+- Dead-letter infrastructure verified:
+  - Event Grid subscription configured with dead-letter to `deadletter` blob container
+  - Retry policy: 30 attempts, 24-hour TTL (service defaults)
+  - Dead-letter container exists and is empty (no failures during testing)
+  - Event filtering: BlobCreated only, advanced subject filter for resumes/coverletters/jobdescriptions
+- Cleaned up test application (soft-deleted)
+
+**Decisions made:**
+
+- Single entry point pattern (`src/index.ts`) instead of glob in package.json `main` — more reliable across Azure Functions runtimes
+- `STORAGE_ACCOUNT_KEY` added to Bicep (was only in local.settings.json previously)
+- Dead-letter verification is configuration-only (no intentional failure test) — triggering 30 consecutive failures over 24 hours isn't practical for manual testing
+
+**Blockers:** None
+
+**Next session:** Phase 4 — Frontend (React + TypeScript with Vite).

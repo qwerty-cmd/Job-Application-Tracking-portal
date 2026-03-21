@@ -130,7 +130,22 @@ async function processUpload(
   // 3. Check blob size (defence in depth — SAS already limits to 10 MB)
   const containerClient = blobServiceClient.getContainerClient(containerName);
   const blockBlobClient = containerClient.getBlockBlobClient(blobName);
-  const properties = await blockBlobClient.getProperties();
+
+  let properties;
+  try {
+    properties = await blockBlobClient.getProperties();
+  } catch (err: unknown) {
+    // Blob may have been deleted (e.g. re-upload overwrote it, lifecycle policy)
+    // Event Grid retries can deliver events for blobs that no longer exist
+    const statusCode = (err as { statusCode?: number }).statusCode;
+    if (statusCode === 404) {
+      context.log(
+        `Blob not found (already deleted): ${containerName}/${blobName} — skipping`,
+      );
+      return;
+    }
+    throw err;
+  }
 
   if (properties.contentLength && properties.contentLength > MAX_FILE_SIZE) {
     context.log(
