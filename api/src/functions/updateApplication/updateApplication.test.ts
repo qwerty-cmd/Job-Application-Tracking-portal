@@ -482,5 +482,75 @@ describe("updateApplication", () => {
       // updatedAt is refreshed
       expect(app.updatedAt).not.toBe(EXISTING_APPLICATION.updatedAt);
     });
+
+    it("should return 400 when request body is not valid JSON", async () => {
+      const req = new HttpRequest({
+        method: "PATCH",
+        url: "http://localhost/api/applications/abc-123",
+        params: { id: "abc-123" },
+        headers: { "Content-Type": "application/json" },
+        body: { string: "not valid json{{{" },
+      });
+      const res = await handler(req, createContext());
+
+      expect(res.status).toBe(400);
+      const body = parseBody(res);
+      expect(body.data).toBeNull();
+      expect(body.error).toMatchObject({
+        code: "INVALID_BODY",
+        message: "Request body must be valid JSON",
+      });
+    });
+
+    it("should not allow mass assignment of protected fields (isDeleted, id, createdAt, interviews)", async () => {
+      const req = buildRequest("abc-123", {
+        company: "Updated Corp",
+        isDeleted: true,
+        id: "hacked-id",
+        createdAt: "2020-01-01T00:00:00Z",
+        interviews: [],
+        resume: {
+          blobUrl: "https://evil.com/payload",
+          fileName: "bad.pdf",
+          uploadedAt: "2026-01-01T00:00:00Z",
+        },
+      });
+      const res = await handler(req, createContext());
+
+      expect(res.status).toBe(200);
+      const body = parseBody(res);
+      const app = body.data as Record<string, unknown>;
+      // Whitelisted field is updated
+      expect(app.company).toBe("Updated Corp");
+      // Protected fields remain unchanged
+      expect(app.isDeleted).toBe(false);
+      expect(app.id).toBe("abc-123");
+      expect(app.createdAt).toBe(EXISTING_APPLICATION.createdAt);
+      expect((app.interviews as unknown[]).length).toBe(1);
+    });
+
+    it("should not allow clearing rejection via null when status is Rejected", async () => {
+      // Set up a Rejected application with a reason
+      const rejectedApp = {
+        ...EXISTING_APPLICATION,
+        status: "Rejected",
+        rejection: { reason: "Ghosted", notes: "No response" },
+      };
+      mockRead.mockResolvedValue({ resource: { ...rejectedApp } });
+
+      // Try to clear rejection without changing status — post-merge invariant
+      // catches that status is Rejected but rejection.reason is now missing
+      const req = buildRequest("abc-123", { rejection: null });
+      const res = await handler(req, createContext());
+
+      expect(res.status).toBe(400);
+      const body = parseBody(res);
+      const error = body.error as Record<string, unknown>;
+      const details = error.details as Array<{
+        field: string;
+        message: string;
+      }>;
+      expect(details.some((d) => d.field === "rejection.reason")).toBe(true);
+    });
   });
 });
