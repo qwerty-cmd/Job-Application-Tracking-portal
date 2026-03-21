@@ -1,0 +1,1243 @@
+openapi: "3.0.3"
+info:
+  title: Job Application Tracker API
+  description: >-
+    Backend API for the Job Application Tracking Portal.
+    Azure Functions (Node.js/TypeScript) with Cosmos DB, Blob Storage, and Event Grid.
+  version: "1.0.0"
+  contact:
+    name: Job Tracker
+
+servers:
+  - url: http://localhost:7071
+    description: Local Azure Functions
+  - url: https://func-jobtracker.azurewebsites.net
+    description: Azure Production
+
+security:
+  - swaAuth: []
+
+tags:
+  - name: Applications
+    description: CRUD operations for job applications
+  - name: Interviews
+    description: Interview round management (nested within applications)
+  - name: Files
+    description: File upload/download via SAS tokens and file deletion
+  - name: Dashboard
+    description: Application statistics and analytics
+
+paths:
+  # ──────────────────────────────────────────────
+  # Applications
+  # ──────────────────────────────────────────────
+  /api/applications:
+    get:
+      tags: [Applications]
+      operationId: listApplications
+      summary: List all applications
+      description: >-
+        Returns paginated list of non-deleted applications with summary fields.
+        Supports filtering by status, date range, and sorting.
+      parameters:
+        - name: status
+          in: query
+          description: Filter by application status
+          schema:
+            type: string
+            enum:
+              - Applying
+              - Application Submitted
+              - Recruiter Screening
+              - Interview Stage
+              - Pending Offer
+              - Accepted
+              - Rejected
+              - Withdrawn
+        - name: from
+          in: query
+          description: Filter by dateApplied >= from (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          description: Filter by dateApplied <= to (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+        - name: sortBy
+          in: query
+          description: Sort field
+          schema:
+            type: string
+            enum: [dateApplied, company, status, updatedAt]
+            default: dateApplied
+        - name: sortOrder
+          in: query
+          description: Sort direction
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+        - name: page
+          in: query
+          description: Page number
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: pageSize
+          in: query
+          description: Items per page (max 100)
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Paginated application list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/ApplicationSummary"
+                      pagination:
+                        $ref: "#/components/schemas/Pagination"
+                  error:
+                    type: object
+                    nullable: true
+              example:
+                data:
+                  items:
+                    - id: abc-123
+                      company: Contoso Ltd
+                      role: Senior Cloud Engineer
+                      location:
+                        city: Sydney
+                        country: Australia
+                        workMode: Hybrid
+                        other: null
+                      dateApplied: "2026-03-15"
+                      status: Interview Stage
+                      jobPostingUrl: https://careers.contoso.com/job/12345
+                      hasResume: true
+                      hasCoverLetter: true
+                      hasJobDescription: true
+                      interviewCount: 2
+                      createdAt: "2026-03-15T10:30:00Z"
+                      updatedAt: "2026-03-25T16:00:00Z"
+                  pagination:
+                    page: 1
+                    pageSize: 20
+                    totalItems: 47
+                    totalPages: 3
+                error: null
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+    post:
+      tags: [Applications]
+      operationId: createApplication
+      summary: Create new application
+      description: >-
+        Creates a new job application. Status is always forced to 'Applying'.
+        Files are uploaded separately via SAS token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateApplicationRequest"
+            example:
+              company: Contoso Ltd
+              role: Senior Cloud Engineer
+              location:
+                city: Sydney
+                country: Australia
+                workMode: Hybrid
+                other: null
+              dateApplied: "2026-03-15"
+              jobPostingUrl: https://careers.contoso.com/job/12345
+              jobDescriptionText: We are looking for a Senior Cloud Engineer to...
+      responses:
+        "201":
+          description: Application created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse_Application"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/applications/stats:
+    get:
+      tags: [Dashboard]
+      operationId: getStats
+      summary: Dashboard statistics
+      description: >-
+        Returns application counts by status and interview counts by type
+        for a date range. Soft-deleted apps are always excluded.
+      parameters:
+        - name: from
+          in: query
+          description: Start date (defaults to 1st of current month)
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          description: End date (defaults to today)
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Statistics data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse_Stats"
+              example:
+                data:
+                  period:
+                    from: "2026-03-01"
+                    to: "2026-03-18"
+                  totalApplications: 47
+                  byStatus:
+                    Applying: 3
+                    Application Submitted: 12
+                    Recruiter Screening: 8
+                    Interview Stage: 5
+                    Pending Offer: 1
+                    Accepted: 2
+                    Rejected: 14
+                    Withdrawn: 2
+                  totalInterviews: 18
+                  interviewsByType:
+                    Phone Screen: 8
+                    Technical: 5
+                    Behavioral: 3
+                    Case Study: 1
+                    Panel: 1
+                    Take Home Test: 0
+                    Other: 0
+                error: null
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/applications/deleted:
+    get:
+      tags: [Applications]
+      operationId: listDeleted
+      summary: List soft-deleted applications
+      description: >-
+        Returns all soft-deleted applications ordered by deletedAt descending.
+        No pagination. Supports restore/undo UI.
+      responses:
+        "200":
+          description: Deleted applications list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/DeletedApplicationSummary"
+                  error:
+                    type: object
+                    nullable: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/applications/{id}:
+    get:
+      tags: [Applications]
+      operationId: getApplication
+      summary: Get single application
+      description: >-
+        Returns full application detail including interviews.
+        blobUrl is stripped from file metadata — use the download SAS token endpoint for file access.
+      parameters:
+        - $ref: "#/components/parameters/ApplicationId"
+      responses:
+        "200":
+          description: Full application detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse_Application"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+    patch:
+      tags: [Applications]
+      operationId: updateApplication
+      summary: Update application fields
+      description: >-
+        Partial update — send only changed fields.
+        If status is set to Rejected, rejection.reason is required.
+        Field whitelisting prevents mass assignment.
+      parameters:
+        - $ref: "#/components/parameters/ApplicationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateApplicationRequest"
+            examples:
+              updateStatus:
+                summary: Update status only
+                value:
+                  status: Application Submitted
+              reject:
+                summary: Set to Rejected with reason
+                value:
+                  status: Rejected
+                  rejection:
+                    reason: Failed Technical
+                    notes: "Couldn't solve the system design question"
+              updateLocation:
+                summary: Update location
+                value:
+                  location:
+                    city: Melbourne
+                    country: Australia
+                    workMode: Remote
+                    other: null
+      responses:
+        "200":
+          description: Updated application
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse_Application"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+    delete:
+      tags: [Applications]
+      operationId: deleteApplication
+      summary: Soft delete application
+      description: >-
+        Sets isDeleted=true and deletedAt timestamp.
+        Files are NOT deleted — orphaned blobs caught by 90-day lifecycle policy.
+      parameters:
+        - $ref: "#/components/parameters/ApplicationId"
+      responses:
+        "200":
+          description: Soft deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      deleted:
+                        type: boolean
+                  error:
+                    type: object
+                    nullable: true
+              example:
+                data:
+                  id: abc-123
+                  deleted: true
+                error: null
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/applications/{id}/restore:
+    patch:
+      tags: [Applications]
+      operationId: restoreApplication
+      summary: Restore soft-deleted application
+      description: >-
+        Sets isDeleted=false and deletedAt=null.
+        Only works on currently soft-deleted applications.
+      parameters:
+        - $ref: "#/components/parameters/ApplicationId"
+      responses:
+        "200":
+          description: Restored application
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse_Application"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  # ──────────────────────────────────────────────
+  # Interviews
+  # ──────────────────────────────────────────────
+  /api/applications/{id}/interviews:
+    post:
+      tags: [Interviews]
+      operationId: addInterview
+      summary: Add interview round
+      description: >-
+        Appends a new interview round. Auto-sets round and order numbers.
+        If app status is before Interview Stage, auto-updates to Interview Stage.
+      parameters:
+        - $ref: "#/components/parameters/ApplicationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInterviewRequest"
+            example:
+              type: Technical
+              date: "2026-03-25"
+              interviewers: "Bob Chen, Principal Engineer"
+              notes: ""
+              reflection: ""
+              outcome: Pending
+      responses:
+        "201":
+          description: Application with new interview added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse_Application"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/applications/{id}/interviews/{interviewId}:
+    patch:
+      tags: [Interviews]
+      operationId: updateInterview
+      summary: Update interview round
+      description: Partial update of an interview. Send only changed fields.
+      parameters:
+        - $ref: "#/components/parameters/ApplicationId"
+        - $ref: "#/components/parameters/InterviewId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateInterviewRequest"
+            example:
+              outcome: Passed
+              reflection: Went better than expected. Solved the design problem.
+      responses:
+        "200":
+          description: Updated application with modified interview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse_Application"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+    delete:
+      tags: [Interviews]
+      operationId: deleteInterview
+      summary: Remove interview round
+      description: Removes the interview from the array and renumbers remaining rounds sequentially.
+      parameters:
+        - $ref: "#/components/parameters/ApplicationId"
+        - $ref: "#/components/parameters/InterviewId"
+      responses:
+        "200":
+          description: Updated application with interview removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse_Application"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/applications/{id}/interviews/reorder:
+    patch:
+      tags: [Interviews]
+      operationId: reorderInterviews
+      summary: Reorder interview rounds
+      description: >-
+        Update the display order of interview rounds.
+        Must include ALL interview IDs — no partial reorder.
+      parameters:
+        - $ref: "#/components/parameters/ApplicationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReorderInterviewsRequest"
+            example:
+              order:
+                - int-uuid-2
+                - int-uuid-1
+                - int-uuid-3
+      responses:
+        "200":
+          description: Application with reordered interviews
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse_Application"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  # ──────────────────────────────────────────────
+  # Files
+  # ──────────────────────────────────────────────
+  /api/applications/{id}/files/{fileType}:
+    delete:
+      tags: [Files]
+      operationId: deleteFile
+      summary: Delete a single uploaded file
+      description: >-
+        Deletes the blob from storage and nulls the file field in Cosmos.
+        fileType must be resume, coverLetter, or jobDescription.
+      parameters:
+        - $ref: "#/components/parameters/ApplicationId"
+        - name: fileType
+          in: path
+          required: true
+          description: Type of file to delete
+          schema:
+            type: string
+            enum: [resume, coverLetter, jobDescription]
+      responses:
+        "200":
+          description: File deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      fileType:
+                        type: string
+                      deleted:
+                        type: boolean
+                  error:
+                    type: object
+                    nullable: true
+              example:
+                data:
+                  id: abc-123
+                  fileType: resume
+                  deleted: true
+                error: null
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/upload/sas-token:
+    post:
+      tags: [Files]
+      operationId: uploadSasToken
+      summary: Get SAS token for file upload
+      description: >-
+        Generates a 5-minute SAS token scoped to a single blob with create+write permissions.
+        Application must exist and not be soft-deleted.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadSasTokenRequest"
+            example:
+              applicationId: abc-123
+              fileType: resume
+              fileName: my-resume.pdf
+              contentType: application/pdf
+      responses:
+        "200":
+          description: SAS token for upload
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      uploadUrl:
+                        type: string
+                        description: Full blob URL with SAS token
+                      blobPath:
+                        type: string
+                        description: Blob path within the container
+                      expiresAt:
+                        type: string
+                        format: date-time
+                  error:
+                    type: object
+                    nullable: true
+              example:
+                data:
+                  uploadUrl: "https://stjobtrackermliokt.blob.core.windows.net/resumes/abc-123/1710498900000-my-resume.pdf?sv=2021-06-08&se=2026-03-15T10:35:00Z&sr=b&sp=cw&sig=..."
+                  blobPath: resumes/abc-123/1710498900000-my-resume.pdf
+                  expiresAt: "2026-03-15T10:35:00Z"
+                error: null
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/download/sas-token:
+    get:
+      tags: [Files]
+      operationId: downloadSasToken
+      summary: Get SAS token for file download
+      description: >-
+        Generates a 5-minute read-only SAS token for an existing file.
+        Returns 404 if no file of that type exists for the application.
+      parameters:
+        - name: applicationId
+          in: query
+          required: true
+          description: Application UUID
+          schema:
+            type: string
+        - name: fileType
+          in: query
+          required: true
+          description: Type of file to download
+          schema:
+            type: string
+            enum: [resume, coverLetter, jobDescription]
+      responses:
+        "200":
+          description: SAS token for download
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      downloadUrl:
+                        type: string
+                        description: Full blob URL with read SAS token
+                      fileName:
+                        type: string
+                      expiresAt:
+                        type: string
+                        format: date-time
+                  error:
+                    type: object
+                    nullable: true
+              example:
+                data:
+                  downloadUrl: "https://stjobtrackermliokt.blob.core.windows.net/resumes/abc-123/my-resume.pdf?sv=2021-06-08&se=2026-03-15T10:35:00Z&sr=b&sp=r&sig=..."
+                  fileName: my-resume.pdf
+                  expiresAt: "2026-03-15T10:35:00Z"
+                error: null
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+# ════════════════════════════════════════════════
+# Components
+# ════════════════════════════════════════════════
+components:
+  securitySchemes:
+    swaAuth:
+      type: apiKey
+      in: header
+      name: x-ms-client-principal
+      description: >-
+        Azure SWA managed auth header
+        (base64-encoded client principal JSON with 'owner' role required)
+
+  parameters:
+    ApplicationId:
+      name: id
+      in: path
+      required: true
+      description: Application UUID
+      schema:
+        type: string
+        format: uuid
+    InterviewId:
+      name: interviewId
+      in: path
+      required: true
+      description: Interview UUID
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    Location:
+      type: object
+      properties:
+        city:
+          type: string
+        country:
+          type: string
+        workMode:
+          type: string
+          enum: [Remote, Hybrid, Onsite]
+        other:
+          type: string
+          nullable: true
+
+    FileMetadata:
+      type: object
+      nullable: true
+      description: File metadata (blobUrl is never returned in API responses)
+      properties:
+        fileName:
+          type: string
+        uploadedAt:
+          type: string
+          format: date-time
+
+    Rejection:
+      type: object
+      nullable: true
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          enum:
+            - Ghosted
+            - Failed Technical
+            - Failed Behavioral
+            - Overqualified
+            - Underqualified
+            - Salary Mismatch
+            - Position Filled
+            - Company Freeze
+            - Other
+        notes:
+          type: string
+
+    Interview:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        round:
+          type: integer
+        type:
+          type: string
+          enum:
+            - Phone Screen
+            - Technical
+            - Behavioral
+            - Case Study
+            - Panel
+            - Take Home Test
+            - Other
+        date:
+          type: string
+          format: date
+        interviewers:
+          type: string
+          maxLength: 500
+        notes:
+          type: string
+          maxLength: 10000
+        reflection:
+          type: string
+          maxLength: 10000
+        outcome:
+          type: string
+          enum: [Passed, Failed, Pending, Cancelled]
+        order:
+          type: integer
+
+    Application:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        company:
+          type: string
+          maxLength: 200
+        role:
+          type: string
+          maxLength: 200
+        location:
+          $ref: "#/components/schemas/Location"
+        dateApplied:
+          type: string
+          format: date
+        jobPostingUrl:
+          type: string
+          format: uri
+          nullable: true
+        jobDescriptionText:
+          type: string
+          maxLength: 50000
+          nullable: true
+        jobDescriptionFile:
+          $ref: "#/components/schemas/FileMetadata"
+        status:
+          type: string
+          enum:
+            - Applying
+            - Application Submitted
+            - Recruiter Screening
+            - Interview Stage
+            - Pending Offer
+            - Accepted
+            - Rejected
+            - Withdrawn
+        resume:
+          $ref: "#/components/schemas/FileMetadata"
+        coverLetter:
+          $ref: "#/components/schemas/FileMetadata"
+        rejection:
+          $ref: "#/components/schemas/Rejection"
+        interviews:
+          type: array
+          items:
+            $ref: "#/components/schemas/Interview"
+        isDeleted:
+          type: boolean
+        deletedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ApplicationSummary:
+      type: object
+      description: Summary returned in list endpoints — no interview details, no JD text, no blob URLs
+      properties:
+        id:
+          type: string
+        company:
+          type: string
+        role:
+          type: string
+        location:
+          $ref: "#/components/schemas/Location"
+        dateApplied:
+          type: string
+          format: date
+        status:
+          type: string
+        jobPostingUrl:
+          type: string
+          nullable: true
+        hasResume:
+          type: boolean
+        hasCoverLetter:
+          type: boolean
+        hasJobDescription:
+          type: boolean
+        interviewCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    DeletedApplicationSummary:
+      allOf:
+        - $ref: "#/components/schemas/ApplicationSummary"
+        - type: object
+          properties:
+            deletedAt:
+              type: string
+              format: date-time
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        totalItems:
+          type: integer
+        totalPages:
+          type: integer
+
+    CreateApplicationRequest:
+      type: object
+      required: [company, role, dateApplied]
+      properties:
+        company:
+          type: string
+          maxLength: 200
+        role:
+          type: string
+          maxLength: 200
+        dateApplied:
+          type: string
+          format: date
+          description: "YYYY-MM-DD, must not be in the future"
+        location:
+          $ref: "#/components/schemas/Location"
+        jobPostingUrl:
+          type: string
+          format: uri
+        jobDescriptionText:
+          type: string
+          maxLength: 50000
+
+    UpdateApplicationRequest:
+      type: object
+      description: Partial update — send only changed fields
+      properties:
+        company:
+          type: string
+          maxLength: 200
+        role:
+          type: string
+          maxLength: 200
+        dateApplied:
+          type: string
+          format: date
+        status:
+          type: string
+          enum:
+            - Applying
+            - Application Submitted
+            - Recruiter Screening
+            - Interview Stage
+            - Pending Offer
+            - Accepted
+            - Rejected
+            - Withdrawn
+        location:
+          $ref: "#/components/schemas/Location"
+        jobPostingUrl:
+          type: string
+          format: uri
+        jobDescriptionText:
+          type: string
+          maxLength: 50000
+        rejection:
+          $ref: "#/components/schemas/Rejection"
+
+    CreateInterviewRequest:
+      type: object
+      required: [type, date, outcome]
+      properties:
+        type:
+          type: string
+          enum:
+            - Phone Screen
+            - Technical
+            - Behavioral
+            - Case Study
+            - Panel
+            - Take Home Test
+            - Other
+        date:
+          type: string
+          format: date
+          description: YYYY-MM-DD (future dates allowed)
+        interviewers:
+          type: string
+          maxLength: 500
+        notes:
+          type: string
+          maxLength: 10000
+        reflection:
+          type: string
+          maxLength: 10000
+        outcome:
+          type: string
+          enum: [Passed, Failed, Pending, Cancelled]
+
+    UpdateInterviewRequest:
+      type: object
+      description: Partial update — send only changed fields
+      properties:
+        type:
+          type: string
+          enum:
+            - Phone Screen
+            - Technical
+            - Behavioral
+            - Case Study
+            - Panel
+            - Take Home Test
+            - Other
+        date:
+          type: string
+          format: date
+        interviewers:
+          type: string
+          maxLength: 500
+        notes:
+          type: string
+          maxLength: 10000
+        reflection:
+          type: string
+          maxLength: 10000
+        outcome:
+          type: string
+          enum: [Passed, Failed, Pending, Cancelled]
+
+    ReorderInterviewsRequest:
+      type: object
+      required: [order]
+      properties:
+        order:
+          type: array
+          items:
+            type: string
+          description: Array of interview IDs in desired display order. Must contain ALL interview IDs.
+
+    UploadSasTokenRequest:
+      type: object
+      required: [applicationId, fileType, fileName, contentType]
+      properties:
+        applicationId:
+          type: string
+          description: Application UUID — must exist and not be soft-deleted
+        fileType:
+          type: string
+          enum: [resume, coverLetter, jobDescription]
+          description: Type of file being uploaded
+        fileName:
+          type: string
+          description: "File name ending in .pdf, .docx, or .html (JD only)"
+        contentType:
+          type: string
+          enum:
+            - application/pdf
+            - application/vnd.openxmlformats-officedocument.wordprocessingml.document
+            - text/html
+          description: MIME type matching file extension
+
+    ErrorResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          nullable: true
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: array
+              items:
+                type: object
+                properties:
+                  field:
+                    type: string
+                  message:
+                    type: string
+
+    SuccessResponse_Application:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/Application"
+        error:
+          type: object
+          nullable: true
+
+    SuccessResponse_Stats:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            period:
+              type: object
+              properties:
+                from:
+                  type: string
+                  format: date
+                to:
+                  type: string
+                  format: date
+            totalApplications:
+              type: integer
+            byStatus:
+              type: object
+              properties:
+                Applying:
+                  type: integer
+                Application Submitted:
+                  type: integer
+                Recruiter Screening:
+                  type: integer
+                Interview Stage:
+                  type: integer
+                Pending Offer:
+                  type: integer
+                Accepted:
+                  type: integer
+                Rejected:
+                  type: integer
+                Withdrawn:
+                  type: integer
+            totalInterviews:
+              type: integer
+            interviewsByType:
+              type: object
+              properties:
+                Phone Screen:
+                  type: integer
+                Technical:
+                  type: integer
+                Behavioral:
+                  type: integer
+                Case Study:
+                  type: integer
+                Panel:
+                  type: integer
+                Take Home Test:
+                  type: integer
+                Other:
+                  type: integer
+        error:
+          type: object
+          nullable: true
+
+  responses:
+    ValidationError:
+      description: Validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            data: null
+            error:
+              code: VALIDATION_ERROR
+              message: Validation failed
+              details:
+                - field: company
+                  message: Required field
+                - field: dateApplied
+                  message: Cannot be in the future
+
+    Unauthorized:
+      description: No valid session — x-ms-client-principal header absent or invalid
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            data: null
+            error:
+              code: UNAUTHORIZED
+              message: Authentication required
+
+    NotFound:
+      description: Resource not found or soft-deleted
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            data: null
+            error:
+              code: NOT_FOUND
+              message: Application abc-123 not found
+
+    InternalError:
+      description: Unexpected server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            data: null
+            error:
+              code: INTERNAL_ERROR
+              message: An unexpected error occurred
