@@ -429,6 +429,25 @@ describe("reorderInterviews", () => {
       const error = body.error as Record<string, unknown>;
       expect(error.code).toBe("VALIDATION_ERROR");
     });
+
+    it("should return 400 when request body is not valid JSON", async () => {
+      const req = new HttpRequest({
+        method: "PATCH",
+        url: "http://localhost/api/applications/app-001/interviews/reorder",
+        params: { id: "app-001" },
+        headers: { "Content-Type": "application/json" },
+        body: { string: "not valid json{{{" },
+      });
+      const res = await handler(req, createContext());
+
+      expect(res.status).toBe(400);
+      const body = parseBody(res);
+      expect(body.data).toBeNull();
+      expect(body.error).toMatchObject({
+        code: "INVALID_BODY",
+        message: "Request body must be valid JSON",
+      });
+    });
   });
 
   // =========================================================================
