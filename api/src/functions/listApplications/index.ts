@@ -74,6 +74,8 @@ async function listApplications(
     }
 
     const whereClause = conditions.join(" AND ");
+    // SAFETY: sortBy is validated against VALID_SORT_FIELDS whitelist above;
+    // sortOrder is constrained to "asc" | "desc". Both are safe for interpolation.
     const query = `SELECT * FROM c WHERE ${whereClause} ORDER BY c.${sortBy} ${sortOrder.toUpperCase()}`;
 
     // 4. Execute query
