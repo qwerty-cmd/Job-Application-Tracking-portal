@@ -56,65 +56,65 @@ export interface Application {
 // --- Enums ---
 
 export const APPLICATION_STATUSES = [
-  'Applying',
-  'Application Submitted',
-  'Recruiter Screening',
-  'Interview Stage',
-  'Pending Offer',
-  'Accepted',
-  'Rejected',
-  'Withdrawn',
+  "Applying",
+  "Application Submitted",
+  "Recruiter Screening",
+  "Interview Stage",
+  "Pending Offer",
+  "Accepted",
+  "Rejected",
+  "Withdrawn",
 ] as const;
 export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
 
 export const REJECTION_REASONS = [
-  'Ghosted',
-  'Failed Technical',
-  'Failed Behavioral',
-  'Overqualified',
-  'Underqualified',
-  'Salary Mismatch',
-  'Position Filled',
-  'Company Freeze',
-  'Other',
+  "Ghosted",
+  "Failed Technical",
+  "Failed Behavioral",
+  "Overqualified",
+  "Underqualified",
+  "Salary Mismatch",
+  "Position Filled",
+  "Company Freeze",
+  "Other",
 ] as const;
 export type RejectionReason = (typeof REJECTION_REASONS)[number];
 
 export const INTERVIEW_TYPES = [
-  'Phone Screen',
-  'Technical',
-  'Behavioral',
-  'Case Study',
-  'Panel',
-  'Take Home Test',
-  'Other',
+  "Phone Screen",
+  "Technical",
+  "Behavioral",
+  "Case Study",
+  "Panel",
+  "Take Home Test",
+  "Other",
 ] as const;
 export type InterviewType = (typeof INTERVIEW_TYPES)[number];
 
 export const INTERVIEW_OUTCOMES = [
-  'Passed',
-  'Failed',
-  'Pending',
-  'Cancelled',
+  "Passed",
+  "Failed",
+  "Pending",
+  "Cancelled",
 ] as const;
 export type InterviewOutcome = (typeof INTERVIEW_OUTCOMES)[number];
 
-export const WORK_MODES = ['Remote', 'Hybrid', 'Onsite'] as const;
+export const WORK_MODES = ["Remote", "Hybrid", "Onsite"] as const;
 export type WorkMode = (typeof WORK_MODES)[number];
 
-export const FILE_TYPES = ['resume', 'coverLetter', 'jobDescription'] as const;
+export const FILE_TYPES = ["resume", "coverLetter", "jobDescription"] as const;
 export type FileType = (typeof FILE_TYPES)[number];
 
 // Status ordering for "before Interview Stage" check
 export const STATUS_ORDER: Record<ApplicationStatus, number> = {
-  'Applying': 0,
-  'Application Submitted': 1,
-  'Recruiter Screening': 2,
-  'Interview Stage': 3,
-  'Pending Offer': 4,
-  'Accepted': 5,
-  'Rejected': 6,
-  'Withdrawn': 7,
+  Applying: 0,
+  "Application Submitted": 1,
+  "Recruiter Screening": 2,
+  "Interview Stage": 3,
+  "Pending Offer": 4,
+  Accepted: 5,
+  Rejected: 6,
+  Withdrawn: 7,
 };
 
 // --- API Response Types ---
@@ -170,17 +170,35 @@ export interface StatsResponse {
 
 // File content type mapping
 export const EXTENSION_CONTENT_TYPES: Record<string, string> = {
-  '.pdf': 'application/pdf',
-  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  '.html': 'text/html',
+  ".pdf": "application/pdf",
+  ".docx":
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".html": "text/html",
 };
 
 // Allowed extensions per file type
 export const ALLOWED_EXTENSIONS: Record<FileType, string[]> = {
-  resume: ['.pdf', '.docx'],
-  coverLetter: ['.pdf', '.docx'],
-  jobDescription: ['.pdf', '.docx', '.html'],
+  resume: [".pdf", ".docx"],
+  coverLetter: [".pdf", ".docx"],
+  jobDescription: [".pdf", ".docx", ".html"],
 };
 
 // Max file size: 10 MB
 export const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10485760 bytes
+
+// File type to Cosmos field name mapping
+export const FILE_TYPE_TO_FIELD: Record<FileType, keyof Application> = {
+  resume: "resume",
+  coverLetter: "coverLetter",
+  jobDescription: "jobDescriptionFile",
+};
+
+// File type to blob container name mapping
+export const FILE_TYPE_CONTAINERS: Record<FileType, string> = {
+  resume: "resumes",
+  coverLetter: "coverletters",
+  jobDescription: "jobdescriptions",
+};
+
+// Set of valid file type strings for quick lookup
+export const VALID_FILE_TYPES_SET: ReadonlySet<string> = new Set(FILE_TYPES);
