@@ -89,14 +89,14 @@ A personal job application tracking portal built on Azure's free tier. Tracks ap
 
 ### Component Responsibilities
 
-| Component                 | Responsibility                                                               |
-| ------------------------- | ---------------------------------------------------------------------------- |
-| **Azure Static Web Apps** | Hosts SPA, enforces auth/authz at the gateway, proxies `/api/*` to Functions |
-| **Azure Functions**       | REST API (CRUD), SAS token generation, `processUpload` event handler         |
-| **Azure Cosmos DB**       | Stores all application data as JSON documents                                |
-| **Azure Blob Storage**    | Stores uploaded files (resumes, cover letters, job descriptions)             |
-| **Azure Event Grid**      | Routes `BlobCreated` events from Storage to `processUpload` Function         |
-| **GitHub Actions**        | CI/CD pipeline, auto-triggered by Azure SWA on push                          |
+| Component                 | Responsibility                                                                    |
+| ------------------------- | --------------------------------------------------------------------------------- |
+| **Azure Static Web Apps** | Hosts SPA, built-in auth (GitHub provider), serves `x-ms-client-principal` header |
+| **Azure Functions**       | REST API (CRUD), SAS token generation, `processUpload` event handler              |
+| **Azure Cosmos DB**       | Stores all application data as JSON documents                                     |
+| **Azure Blob Storage**    | Stores uploaded files (resumes, cover letters, job descriptions)                  |
+| **Azure Event Grid**      | Routes `BlobCreated` events from Storage to `processUpload` Function              |
+| **GitHub Actions**        | CI/CD pipeline, auto-triggered by Azure SWA on push                               |
 
 ### Tech Stack
 
@@ -137,25 +137,32 @@ User (Browser)
       │
       ▼
 ┌─────────────────────────────────────────┐
-│        Azure SWA Gateway                │
+│        Azure Static Web Apps            │
 │                                         │
-│  1. Unauthenticated? → 401             │
-│  2. Authenticated but not owner? → 403  │
-│  3. Has 'owner' role? → ✅ Allow        │
-│                                         │
+│  Built-in GitHub auth provider          │
 │  Sets x-ms-client-principal header      │
+│  on authenticated requests              │
 └─────────────────┬───────────────────────┘
-                  │ (only owner reaches here)
+                  │
                   ▼
-         Azure Functions API
+┌─────────────────────────────────────────┐
+│        Azure Functions API              │
+│                                         │
+│  requireOwner() helper on every endpoint│
+│  1. No principal header? → 401          │
+│  2. Missing 'owner' role? → 403         │
+│  3. Has 'owner' role? → ✅ Allow        │
+└─────────────────────────────────────────┘
 ```
+
+> **Note:** SWA Free tier does not support linked backends, so the SWA gateway cannot enforce `/api/*` route rules against the external Function App. Auth is enforced inside each Function via a shared `requireOwner()` helper that validates the `x-ms-client-principal` header.
 
 ### Key Decisions
 
 - **Provider:** GitHub (SWA built-in — no custom identity plumbing)
 - **Access model:** Private app — all routes (frontend + `/api/*`) require custom `owner` role
 - **Roles:** `anonymous`, `authenticated` (SWA built-in) + `owner` (custom, assigned to one GitHub account)
-- **Enforcement:** SWA gateway handles 401/403 before requests reach Functions
+- **Enforcement:** Each Function validates the `x-ms-client-principal` header via `requireOwner()` helper — returns 401 (missing/invalid session) or 403 (missing `owner` role)
 - **API identity:** SWA-managed session + `x-ms-client-principal` header
 - **No API keys, no custom JWT, no API Management in v1**
 - **Rate limiting:** Targeted in-function throttling for sensitive endpoints (SAS token issuance/download)
@@ -380,17 +387,17 @@ All endpoints are prefixed with `/api/` and proxied through Azure Static Web App
 
 ### HTTP Status Codes
 
-| Code | Meaning                | When                                |
-| ---- | ---------------------- | ----------------------------------- |
-| 200  | OK                     | Successful GET, PATCH, DELETE       |
-| 201  | Created                | Successful POST                     |
-| 400  | Bad Request            | Validation failed                   |
-| 401  | Unauthorized           | No valid session (SWA gateway)      |
-| 403  | Forbidden              | Not the owner (SWA gateway)         |
-| 404  | Not Found              | ID doesn't exist or is soft-deleted |
-| 413  | Payload Too Large      | File > 10 MB                        |
-| 415  | Unsupported Media Type | Invalid file type                   |
-| 500  | Internal Server Error  | Unexpected failure                  |
+| Code | Meaning                | When                                       |
+| ---- | ---------------------- | ------------------------------------------ |
+| 200  | OK                     | Successful GET, PATCH, DELETE              |
+| 201  | Created                | Successful POST                            |
+| 400  | Bad Request            | Validation failed                          |
+| 401  | Unauthorized           | No valid session (Function auth guard)     |
+| 403  | Forbidden              | Missing `owner` role (Function auth guard) |
+| 404  | Not Found              | ID doesn't exist or is soft-deleted        |
+| 413  | Payload Too Large      | File > 10 MB                               |
+| 415  | Unsupported Media Type | Invalid file type                          |
+| 500  | Internal Server Error  | Unexpected failure                         |
 
 ### Validation Rules
 
@@ -873,18 +880,18 @@ job-tracker/
 
 ## 17. Security Summary
 
-| Layer                 | Control                                                                                    |
-| --------------------- | ------------------------------------------------------------------------------------------ |
-| **Auth**              | SWA built-in GitHub provider, custom `owner` role                                          |
-| **Authorization**     | SWA gateway enforces 401/403 before Functions execute                                      |
-| **API**               | Input validation, enum enforcement, field length limits                                    |
-| **SAS tokens**        | 5-minute expiry, single-blob scope, minimal permissions                                    |
-| **File validation**   | Client-side (extension + size) → SAS (Content-Length) → processUpload (magic bytes + size) |
-| **CORS**              | Blob Storage allows only SWA origin, `PUT`/`GET`/`HEAD` methods                            |
-| **Secrets**           | Environment variables (`COSMOS_*`, `STORAGE_*`), never in code                             |
-| **Data integrity**    | Soft delete (no permanent loss), Cosmos write before blob delete                           |
-| **Orphan cleanup**    | 90-day lifecycle policy on Blob Storage                                                    |
-| **Event reliability** | Event Grid retries (30 attempts, 24hr TTL) + dead-letter container                         |
+| Layer                 | Control                                                                                                    |
+| --------------------- | ---------------------------------------------------------------------------------------------------------- |
+| **Auth**              | SWA built-in GitHub provider, custom `owner` role                                                          |
+| **Authorization**     | Each Function enforces 401/403 via `requireOwner()` helper (SWA Free tier has no linked backend)           |
+| **API**               | Input validation, enum enforcement, field length limits, field whitelisting on PATCH                       |
+| **SAS tokens**        | 5-minute expiry, single-blob scope, minimal permissions                                                    |
+| **File validation**   | Client-side (extension + size) → processUpload (magic bytes + size) — SAS has no Content-Length constraint |
+| **CORS**              | Blob Storage allows only SWA origin, `PUT`/`GET`/`HEAD` methods                                            |
+| **Secrets**           | Environment variables (`COSMOS_*`, `STORAGE_*`), never in code                                             |
+| **Data integrity**    | Soft delete (no permanent loss), Cosmos write before blob delete                                           |
+| **Orphan cleanup**    | 90-day lifecycle policy on Blob Storage                                                                    |
+| **Event reliability** | Event Grid retries (30 attempts, 24hr TTL) + dead-letter container                                         |
 
 ---
 

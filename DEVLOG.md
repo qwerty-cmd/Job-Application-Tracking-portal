@@ -310,6 +310,7 @@ Each entry records what was done, on which machine, with which AI tool, and what
 - Fixed TypeScript errors: `.js` → `.ts` in test imports, `parseBody` type widening, `Interview` type casts in updateInterview
 
 **Decisions made:**
+
 - Test imports use `.ts` extension (vitest resolves directly), production imports use `.js` (Node16 ESM convention)
 - `tsconfig.test.json` extends main config but includes test files for IDE type-checking
 - `parseBody` helper in tests uses `{ body?: unknown }` to match `HttpResponseInit.body`
@@ -317,3 +318,62 @@ Each entry records what was done, on which machine, with which AI tool, and what
 **Blockers:** None — all 184 tests pass across 12 files.
 
 **Next session:** Continue Phase 2 — implement SAS token upload/download endpoints, file delete endpoint, and `processUpload` Event Grid trigger function.
+
+---
+
+## 2026-03-21 — Work (VS Code Copilot) — Session 10
+
+**What was done:**
+
+- Implemented remaining Phase 2 endpoints with full TDD:
+  - `uploadSasToken` (POST /api/upload/sas-token) — SAS token generation with application validation, file type/extension/contentType validation
+  - `downloadSasToken` (GET /api/download/sas-token) — read-only SAS token for existing files
+  - `deleteFile` (DELETE /api/applications/:id/files/:fileType) — blob deletion + Cosmos field nulling
+  - `processUpload` (Event Grid trigger) — size check, magic bytes validation, soft-delete skip, latest-wins timestamp, old blob cleanup
+- Full Phase 2 code review (security audit + consistency check):
+  - **C-1 (Critical):** Fixed mass assignment vulnerability in `updateApplication` — added field whitelist (`company`, `role`, `location`, `dateApplied`, `status`, `jobPostingUrl`, `jobDescriptionText`, `rejection`)
+  - **H-1:** Added `Content-Type: application/json` header to `requireOwner()` 401/403 responses
+  - **H-2:** Wrapped `req.json()` in try/catch across 6 endpoints to return 400 instead of 500 on invalid JSON
+  - **H-3:** Added `STORAGE_ACCOUNT_KEY` to `local.settings.json`
+  - **H-4:** Documented SAS `Content-Length` constraint gap in CLAUDE.md (Azure Block Blob SAS doesn't support it)
+  - **H-5:** Fixed `processUpload` stream handling — replaced Web API `ReadableStream.getReader()` with Node.js `for await...of` + range download
+- Updated SOLUTION.md — fixed auth model in 5 locations to reflect Function-level enforcement (not SWA gateway)
+- Updated CLAUDE.md — checked off Phase 2, updated "Currently working on" to Phase 3, added recent work entries
+- Removed unused dependencies: `@azure/data-tables`, `uuid`, `@types/uuid`
+- Added missing tests: invalid JSON body handling, mass assignment prevention, rejection clearing edge case
+
+**Decisions made:**
+
+- `updateApplication` whitelists updatable fields before merging — prevents overwriting `id`, `isDeleted`, `createdAt`, `interviews`, file fields
+- Auth errors now return proper `HttpResponseInit` with `Content-Type` header (was returning raw `{ status, body }`)
+- `processUpload` uses Node.js streams + range download (0, 16) instead of downloading entire blob for magic bytes check
+
+**Blockers:** None — Phase 2 complete. All 220+ tests pass across 16 files.
+
+**Next session:** Phase 3 — Event Streaming Pipeline. Deploy Event Grid subscription, test end-to-end upload flow.
+
+## 2026-03-21 — Work (GitHub Copilot / Claude Opus 4.6)
+
+**Phase 2 second code review — Medium/Low issue fixes + shared utility extraction**
+
+- Fixed M-1: `createApplication` now forces `status: "Applying"` — ignores any status in request body (per R1)
+- Fixed M-2: `updateApplication` added post-merge invariant check — if merged status is "Rejected" and no `rejection.reason` exists, returns 400
+- Fixed M-3: Added safety comment on `ORDER BY` interpolation in `listApplications` explaining why it's safe (whitelist-validated)
+- Fixed M-4: Created `sanitizeLocation()` and `sanitizeRejection()` helpers to whitelist nested object fields in create/update endpoints
+- Extracted `stripBlobUrl()` to `api/src/shared/response.ts` — removed duplicated copies from 7 endpoint files
+- Extracted `FILE_TYPE_TO_FIELD`, `FILE_TYPE_CONTAINERS`, `VALID_FILE_TYPES_SET` to `api/src/shared/types.ts` — removed from 4 endpoint files
+- Created `api/src/shared/storageClient.ts` — singleton `BlobServiceClient` with env var validation (mirrors `cosmosClient.ts` pattern)
+- Updated all 4 storage-using endpoints (uploadSasToken, downloadSasToken, deleteFile, processUpload) to use shared `storageClient.ts`
+- Updated `reorderInterviews` to use shared `validateReorderRequest()` from `validation.ts`
+- Updated `createApplication` tests for forced "Applying" status behaviour
+- Created `docs/reviews/phase-2-code-review.md` documenting all issues found and fixes applied across both reviews
+
+**Decisions made:**
+
+- Initial status is always "Applying" — even if client sends a different status, it's ignored (defence in depth for R1)
+- Post-merge validation catches race conditions where status becomes "Rejected" without a rejection reason
+- Storage client follows same singleton + env var validation pattern as Cosmos client
+
+**Blockers:** None — all fixes applied. Need to run tests when Node.js is available to verify.
+
+**Next session:** Run tests to confirm all 230+ pass, then Phase 3 — Event Streaming Pipeline.
