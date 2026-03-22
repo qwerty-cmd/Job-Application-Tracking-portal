@@ -6,6 +6,7 @@
 // See CLAUDE.md: "requireOwner() helper in api/shared/auth.ts"
 
 import { HttpRequest, HttpResponseInit } from "@azure/functions";
+import { Logger } from "./logger.js";
 
 export interface ClientPrincipal {
   identityProvider: string;
@@ -20,6 +21,7 @@ export interface ClientPrincipal {
  */
 export function decodeClientPrincipal(
   req: HttpRequest,
+  logger?: Logger,
 ): ClientPrincipal | null {
   const header = req.headers.get("x-ms-client-principal");
   if (!header) {
@@ -31,11 +33,15 @@ export function decodeClientPrincipal(
     const principal = JSON.parse(decoded) as ClientPrincipal;
 
     if (!principal.userRoles || !Array.isArray(principal.userRoles)) {
+      logger?.warn("Auth decode — missing or invalid userRoles array");
       return null;
     }
 
     return principal;
-  } catch {
+  } catch (err) {
+    logger?.warn("Auth decode — failed to parse client principal header", {
+      error: String(err),
+    });
     return null;
   }
 }
@@ -43,11 +49,19 @@ export function decodeClientPrincipal(
 /**
  * Validates that the request has a valid SWA session with the 'owner' role.
  * Returns null if authorized, or an HttpResponseInit for the error response.
+ * Pass an optional Logger for auth failure visibility in App Insights.
  */
-export function requireOwner(req: HttpRequest): HttpResponseInit | null {
-  const principal = decodeClientPrincipal(req);
+export function requireOwner(
+  req: HttpRequest,
+  logger?: Logger,
+): HttpResponseInit | null {
+  const principal = decodeClientPrincipal(req, logger);
 
   if (!principal) {
+    logger?.warn("Auth failed — no valid session", {
+      method: req.method,
+      url: req.url,
+    });
     return {
       status: 401,
       headers: { "Content-Type": "application/json" },
@@ -59,6 +73,10 @@ export function requireOwner(req: HttpRequest): HttpResponseInit | null {
   }
 
   if (!principal.userRoles.includes("owner")) {
+    logger?.warn("Auth failed — missing owner role", {
+      userId: principal.userId,
+      identityProvider: principal.identityProvider,
+    });
     return {
       status: 403,
       headers: { "Content-Type": "application/json" },
