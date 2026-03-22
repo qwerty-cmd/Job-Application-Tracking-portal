@@ -376,7 +376,80 @@ describe("getStats", () => {
   });
 
   // =========================================================================
-  // SOFT-DELETED EXCLUDED
+  // OUTCOMES BY STAGE
+  // =========================================================================
+  describe("outcomes by stage", () => {
+    it("should count 'No Response' for apps stuck at Applying/Application Submitted", async () => {
+      const req = buildRequest({ from: "2026-03-01", to: "2026-03-18" });
+      const res = await handler(req, createContext());
+
+      const body = parseBody(res);
+      const data = body.data as Record<string, unknown>;
+      const outcomesByStage = data.outcomesByStage as Record<string, number>;
+      // APP_APPLYING + APP_SUBMITTED = 2 no-response
+      expect(outcomesByStage["No Response"]).toBe(2);
+    });
+
+    it("should count rejected apps by their furthest interview stage", async () => {
+      const req = buildRequest({ from: "2026-03-01", to: "2026-03-18" });
+      const res = await handler(req, createContext());
+
+      const body = parseBody(res);
+      const data = body.data as Record<string, unknown>;
+      const outcomesByStage = data.outcomesByStage as Record<string, number>;
+      // APP_REJECTED has 1 Behavioral interview
+      expect(outcomesByStage["Behavioral"]).toBe(1);
+    });
+
+    it("should not count active apps (Interview Stage, Pending Offer, etc.) in outcomes", async () => {
+      const req = buildRequest({ from: "2026-03-01", to: "2026-03-18" });
+      const res = await handler(req, createContext());
+
+      const body = parseBody(res);
+      const data = body.data as Record<string, unknown>;
+      const outcomesByStage = data.outcomesByStage as Record<string, number>;
+      // APP_INTERVIEW_STAGE has Phone Screen + Technical, but is still active
+      // Phone Screen and Technical should be 0 in outcomesByStage
+      expect(outcomesByStage["Phone Screen"]).toBe(0);
+      expect(outcomesByStage["Technical"]).toBe(0);
+    });
+
+    it("should count 'Pre-Interview' for rejected apps with no interviews", async () => {
+      const rejectedNoInterviews = {
+        id: "app-pre",
+        company: "Zeta",
+        role: "Dev",
+        dateApplied: "2026-03-07",
+        status: "Rejected",
+        interviews: [],
+        isDeleted: false,
+        deletedAt: null,
+      };
+      mockFetchAll.mockResolvedValue({
+        resources: [...ACTIVE_APPS, rejectedNoInterviews],
+      });
+
+      const req = buildRequest({ from: "2026-03-01", to: "2026-03-18" });
+      const res = await handler(req, createContext());
+
+      const body = parseBody(res);
+      const data = body.data as Record<string, unknown>;
+      const outcomesByStage = data.outcomesByStage as Record<string, number>;
+      expect(outcomesByStage["Pre-Interview"]).toBe(1);
+    });
+
+    it("should not count soft-deleted apps in outcomesByStage", async () => {
+      const req = buildRequest({ from: "2026-03-01", to: "2026-03-18" });
+      const res = await handler(req, createContext());
+
+      const body = parseBody(res);
+      const data = body.data as Record<string, unknown>;
+      const outcomesByStage = data.outcomesByStage as Record<string, number>;
+      // Soft-deleted app was "Applying" with a Panel interview — should not appear
+      expect(outcomesByStage["Panel"]).toBe(0);
+    });
+  });
+
   // =========================================================================
   describe("soft-deleted excluded", () => {
     it("should not count soft-deleted applications in totalApplications", async () => {
@@ -452,6 +525,12 @@ describe("getStats", () => {
       expect(interviewsByType["Panel"]).toBe(0);
       expect(interviewsByType["Take Home Test"]).toBe(0);
       expect(interviewsByType["Other"]).toBe(0);
+
+      const outcomesByStage = data.outcomesByStage as Record<string, number>;
+      expect(outcomesByStage["No Response"]).toBe(0);
+      expect(outcomesByStage["Pre-Interview"]).toBe(0);
+      expect(outcomesByStage["Phone Screen"]).toBe(0);
+      expect(outcomesByStage["Behavioral"]).toBe(0);
     });
   });
 
@@ -475,6 +554,7 @@ describe("getStats", () => {
       expect(data).toHaveProperty("byStatus");
       expect(data).toHaveProperty("totalInterviews");
       expect(data).toHaveProperty("interviewsByType");
+      expect(data).toHaveProperty("outcomesByStage");
     });
 
     it("should set Content-Type to application/json", async () => {

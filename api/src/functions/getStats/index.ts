@@ -70,21 +70,48 @@ async function getStats(
       interviewsByType[type] = 0;
     }
     let totalInterviews = 0;
+
+    // 6. Outcomes by stage — where ended/stalled applications landed
+    const outcomesByStage: Record<string, number> = {
+      "No Response": 0,
+      "Pre-Interview": 0,
+    };
+    for (const type of INTERVIEW_TYPES) {
+      outcomesByStage[type] = 0;
+    }
+
     for (const app of resources) {
       for (const interview of app.interviews) {
         totalInterviews++;
         interviewsByType[interview.type] =
           (interviewsByType[interview.type] ?? 0) + 1;
       }
+
+      // Classify ended/stalled applications
+      if (app.status === "Rejected" || app.status === "Withdrawn") {
+        if (app.interviews.length > 0) {
+          const last = app.interviews[app.interviews.length - 1];
+          outcomesByStage[last.type] =
+            (outcomesByStage[last.type] ?? 0) + 1;
+        } else {
+          outcomesByStage["Pre-Interview"] += 1;
+        }
+      } else if (
+        app.status === "Applying" ||
+        app.status === "Application Submitted"
+      ) {
+        outcomesByStage["No Response"] += 1;
+      }
     }
 
-    // 6. Return response
+    // 7. Return response
     return successResponse({
       period: { from, to },
       totalApplications: resources.length,
       byStatus,
       totalInterviews,
       interviewsByType,
+      outcomesByStage,
     });
   } catch {
     return serverError();
