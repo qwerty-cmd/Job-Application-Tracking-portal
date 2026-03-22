@@ -1,4 +1,8 @@
 // Entry point — imports all function registrations
+import { initTelemetry } from "./shared/telemetry.js";
+
+initTelemetry();
+
 import "./functions/addInterview/index.js";
 import "./functions/createApplication/index.js";
 import "./functions/deleteApplication/index.js";
