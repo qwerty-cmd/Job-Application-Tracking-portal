@@ -96,26 +96,70 @@ export const mockSummary: ApplicationSummary = toSummary(mockApplication);
 // --- Handlers ---
 
 export const handlers = [
-  // List applications
-  http.get(`${API_BASE}/applications`, () => {
-    const items = [...db.values()].filter((a) => !a.isDeleted).map(toSummary);
+  // List applications (with filtering, sorting, pagination)
+  http.get(`${API_BASE}/applications`, ({ request }) => {
+    const url = new URL(request.url);
+    const status = url.searchParams.get("status");
+    const from = url.searchParams.get("from");
+    const to = url.searchParams.get("to");
+    const sortBy = url.searchParams.get("sortBy") ?? "dateApplied";
+    const sortOrder = url.searchParams.get("sortOrder") ?? "desc";
+    const page = Math.max(1, parseInt(url.searchParams.get("page") ?? "1", 10));
+    const pageSize = Math.min(
+      100,
+      Math.max(1, parseInt(url.searchParams.get("pageSize") ?? "20", 10)),
+    );
+
+    let results = [...db.values()].filter((a) => !a.isDeleted);
+
+    // Status filter
+    if (status) {
+      results = results.filter((a) => a.status === status);
+    }
+    // Date range filter
+    if (from) {
+      results = results.filter((a) => a.dateApplied >= from);
+    }
+    if (to) {
+      results = results.filter((a) => a.dateApplied <= to);
+    }
+
+    // Sort
+    results.sort((a, b) => {
+      const aVal = (a as Record<string, unknown>)[sortBy] as string;
+      const bVal = (b as Record<string, unknown>)[sortBy] as string;
+      if (aVal < bVal) return sortOrder === "asc" ? -1 : 1;
+      if (aVal > bVal) return sortOrder === "asc" ? 1 : -1;
+      return 0;
+    });
+
+    // Pagination
+    const totalItems = results.length;
+    const totalPages = totalItems === 0 ? 0 : Math.ceil(totalItems / pageSize);
+    const offset = (page - 1) * pageSize;
+    const items = results.slice(offset, offset + pageSize).map(toSummary);
+
     return HttpResponse.json({
       data: {
         items,
-        pagination: {
-          page: 1,
-          pageSize: 20,
-          totalItems: items.length,
-          totalPages: 1,
-        },
+        pagination: { page, pageSize, totalItems, totalPages },
       },
       error: null,
     });
   }),
 
   // Stats — MUST be before :id to avoid parameterized match
-  http.get(`${API_BASE}/applications/stats`, () => {
-    const active = [...db.values()].filter((a) => !a.isDeleted);
+  http.get(`${API_BASE}/applications/stats`, ({ request }) => {
+    const url = new URL(request.url);
+    const now = new Date();
+    const defaultFrom = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+    const defaultTo = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const from = url.searchParams.get("from") ?? defaultFrom;
+    const to = url.searchParams.get("to") ?? defaultTo;
+
+    const active = [...db.values()].filter(
+      (a) => !a.isDeleted && a.dateApplied >= from && a.dateApplied <= to,
+    );
     const byStatus: Record<string, number> = {
       Applying: 0,
       "Application Submitted": 0,
@@ -172,7 +216,7 @@ export const handlers = [
       }
     }
     const stats: StatsResponse = {
-      period: { from: "2026-03-01", to: "2026-03-31" },
+      period: { from, to },
       totalApplications: active.length,
       byStatus,
       totalInterviews,
