@@ -1,0 +1,129 @@
+import { describe, it, expect } from "vitest";
+import { screen, waitFor } from "@testing-library/react";
+import { http, HttpResponse } from "msw";
+import { server } from "@/mocks/server";
+import { renderWithProviders } from "@/test-utils";
+import App from "@/App";
+
+function renderDashboard() {
+  window.history.pushState({}, "", "/dashboard");
+  return renderWithProviders(<App />);
+}
+
+describe("DashboardPage", () => {
+  it("renders the dashboard heading", async () => {
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: /dashboard/i }),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("shows loading state initially", async () => {
+    server.use(
+      http.get("/api/applications/stats", async () => {
+        // Delay response so loading state is visible
+        await new Promise((r) => setTimeout(r, 200));
+        return HttpResponse.json({
+          data: null,
+          error: { code: "TIMEOUT", message: "Stats unavailable" },
+        });
+      }),
+    );
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(screen.getByText(/loading dashboard/i)).toBeInTheDocument();
+    });
+  });
+
+  it("displays summary cards with mock stats", async () => {
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(screen.getByText("Total Apps")).toBeInTheDocument();
+    });
+
+    // Mock stats: totalApplications = 5
+    expect(screen.getByText("5")).toBeInTheDocument();
+    expect(screen.getByText("Active")).toBeInTheDocument();
+    // "Rejected" and "Accepted" appear in both summary cards and status chart.
+    // Use getAllByText to verify at least one occurrence.
+    expect(screen.getAllByText("Rejected").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Accepted").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("displays Applications by Status chart", async () => {
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(screen.getByText("Applications by Status")).toBeInTheDocument();
+    });
+
+    // All 8 statuses should appear
+    expect(screen.getByText("Applying")).toBeInTheDocument();
+    expect(screen.getByText("Application Submitted")).toBeInTheDocument();
+    expect(screen.getByText("Interview Stage")).toBeInTheDocument();
+  });
+
+  it("displays Interviews by Type chart", async () => {
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(screen.getByText("Interviews by Type")).toBeInTheDocument();
+    });
+
+    // Mock stats: totalInterviews = 2
+    expect(screen.getByText(/total interviews: 2/i)).toBeInTheDocument();
+    expect(screen.getByText("Phone Screen")).toBeInTheDocument();
+    expect(screen.getByText("Technical")).toBeInTheDocument();
+  });
+
+  it("displays Quick Insights section", async () => {
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(screen.getByText("Quick Insights")).toBeInTheDocument();
+    });
+
+    // Mock stats: 5 total, Applying=1 + Submitted=1 = 2 no response → 3 responded = 60%
+    expect(screen.getByText(/response rate/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/total interviews conducted: 2/i),
+    ).toBeInTheDocument();
+  });
+
+  it("shows date range inputs", async () => {
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(screen.getByText("Total Apps")).toBeInTheDocument();
+    });
+
+    expect(screen.getByLabelText(/from/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/to/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /apply/i })).toBeInTheDocument();
+  });
+
+  it("shows error state when API fails", async () => {
+    server.use(
+      http.get("/api/applications/stats", () => {
+        return HttpResponse.json(
+          {
+            data: null,
+            error: { code: "INTERNAL_ERROR", message: "Stats unavailable" },
+          },
+          { status: 500 },
+        );
+      }),
+    );
+
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(screen.getByText("Stats unavailable")).toBeInTheDocument();
+    });
+  });
+});
