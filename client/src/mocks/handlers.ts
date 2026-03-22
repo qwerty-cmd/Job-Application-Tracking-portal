@@ -126,8 +126,8 @@ export const handlers = [
 
     // Sort
     results.sort((a, b) => {
-      const aVal = (a as Record<string, unknown>)[sortBy] as string;
-      const bVal = (b as Record<string, unknown>)[sortBy] as string;
+      const aVal = (a as unknown as Record<string, unknown>)[sortBy] as string;
+      const bVal = (b as unknown as Record<string, unknown>)[sortBy] as string;
       if (aVal < bVal) return sortOrder === "asc" ? -1 : 1;
       if (aVal > bVal) return sortOrder === "asc" ? 1 : -1;
       return 0;
