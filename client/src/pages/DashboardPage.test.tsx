@@ -5,6 +5,39 @@ import { server } from "@/mocks/server";
 import { renderWithProviders } from "@/test-utils";
 import App from "@/App";
 
+const fixedStats = {
+  period: { from: "2026-03-01", to: "2026-03-18" },
+  totalApplications: 5,
+  byStatus: {
+    Applying: 1,
+    "Application Submitted": 1,
+    "Recruiter Screening": 1,
+    "Interview Stage": 1,
+    "Pending Offer": 0,
+    Accepted: 0,
+    Rejected: 1,
+    Withdrawn: 0,
+  },
+  totalInterviews: 2,
+  interviewsByType: {
+    "Phone Screen": 1,
+    Technical: 1,
+    Behavioral: 0,
+    "Case Study": 0,
+    Panel: 0,
+    "Take Home Test": 0,
+    Other: 0,
+  },
+};
+
+function useFixedStats() {
+  server.use(
+    http.get("/api/applications/stats", () => {
+      return HttpResponse.json({ data: fixedStats, error: null });
+    }),
+  );
+}
+
 function renderDashboard() {
   window.history.pushState({}, "", "/dashboard");
   return renderWithProviders(<App />);
@@ -40,6 +73,7 @@ describe("DashboardPage", () => {
   });
 
   it("displays summary cards with mock stats", async () => {
+    useFixedStats();
     renderDashboard();
 
     await waitFor(() => {
@@ -69,6 +103,7 @@ describe("DashboardPage", () => {
   });
 
   it("displays Interviews by Type chart", async () => {
+    useFixedStats();
     renderDashboard();
 
     await waitFor(() => {
@@ -82,6 +117,7 @@ describe("DashboardPage", () => {
   });
 
   it("displays Quick Insights section", async () => {
+    useFixedStats();
     renderDashboard();
 
     await waitFor(() => {

@@ -263,17 +263,17 @@ az functionapp log tail --name func-jobtracker --resource-group job-tracker-rg
 
 ## Quick Reference
 
-| Aspect             | Mode 1: Full Mock   | Mode 2: Local + Live API                    | Mode 3: Production       |
-| ------------------ | ------------------- | ------------------------------------------- | ------------------------ |
-| **Frontend**       | Vite dev server     | Vite dev server                             | Azure Static Web Apps    |
-| **Backend**        | MSW (in-browser)    | Azure Functions (remote)                    | Azure Functions (remote) |
-| **Auth**           | SWA CLI mock        | SWA CLI mock                                | SWA built-in GitHub      |
-| **Database**       | In-memory mocks     | Azure Cosmos DB                             | Azure Cosmos DB          |
-| **Storage**        | Mock SAS tokens     | Azure Blob Storage                          | Azure Blob Storage       |
-| **URL**            | `localhost:4280`    | `localhost:4280`                            | `*.azurestaticapps.net`  |
+| Aspect             | Mode 1: Full Mock                  | Mode 2: Local + Live API               | Mode 3: Production       |
+| ------------------ | ---------------------------------- | -------------------------------------- | ------------------------ |
+| **Frontend**       | Vite dev server                    | Vite dev server                        | Azure Static Web Apps    |
+| **Backend**        | MSW (in-browser)                   | Azure Functions (remote)               | Azure Functions (remote) |
+| **Auth**           | SWA CLI mock                       | SWA CLI mock                           | SWA built-in GitHub      |
+| **Database**       | In-memory mocks                    | Azure Cosmos DB                        | Azure Cosmos DB          |
+| **Storage**        | Mock SAS tokens                    | Azure Blob Storage                     | Azure Blob Storage       |
+| **URL**            | `localhost:4280`                   | `localhost:4280`                       | `*.azurestaticapps.net`  |
 | **Start command**  | `npx swa start --config-name mock` | `npx swa start --config-name live-api` | Deployed via CI/CD       |
-| **Use case**       | UI development      | Integration testing                         | Production               |
-| **Requires Azure** | No                  | Yes (Functions + DB)                        | Yes (all resources)      |
+| **Use case**       | UI development                     | Integration testing                    | Production               |
+| **Requires Azure** | No                                 | Yes (Functions + DB)                   | Yes (all resources)      |
 
 ---
 
