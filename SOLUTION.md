@@ -855,8 +855,7 @@ job-tracker/
 │   │   ├── api-conventions.instructions.md
 │   │   ├── testing.instructions.md
 │   │   └── bicep.instructions.md
-│   └── workflows/
-│       └── azure-static-web-apps.yml    ← CI/CD pipeline
+│   └── workflows/                        ← CI/CD pipeline files (Phase 5)
 ├── infra/
 │   ├── main.bicep                       ← IaC entrypoint
 │   └── parameters.json                  ← Environment config

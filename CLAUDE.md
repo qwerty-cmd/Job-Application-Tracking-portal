@@ -20,11 +20,11 @@ Auth:      Azure SWA built-in (GitHub provider)
 - [x] Phase 1: Infrastructure (Bicep) — **complete (deployed to Azure, all 16 resources live)**
 - [x] Phase 2: Backend API (CRUD Functions) — **complete (all 16 endpoints + processUpload trigger, 266 tests)**
 - [x] Phase 3: Event Streaming Pipeline — **complete (deployed, E2E verified, dead-letter configured)**
-- [ ] Phase 4: Frontend (React)
+- [x] Phase 4: Frontend (React) — **complete (dashboard, interview pipeline/dropoff analytics, accessibility/test fixes)**
 - [ ] Phase 5: CI/CD & Deployment
 - [ ] Phase 6: Polish & Showcase-Ready
 
-**Currently working on:** Phase 4 — Frontend (React + TypeScript with Vite).
+**Currently working on:** Phase 5 — CI/CD & Deployment.
 
 ## Design Steps Tracker
 
@@ -874,7 +874,7 @@ cd api && npm install && func start
 # Deploy infrastructure
 az deployment group create -g job-tracker-rg -f infra/main.bicep -p infra/parameters.json
 
-# Deploy app (handled by GitHub Actions, but manual if needed)
+# Deploy app (manual path today; GitHub Actions workflow planned for Phase 5)
 swa deploy
 ```
 
@@ -884,8 +884,9 @@ swa deploy
 job-tracker/
 ├── .github/
 │   ├── copilot-instructions.md
-│   └── workflows/
-│       └── azure-static-web-apps.yml
+│   ├── agents/
+│   ├── instructions/
+│   └── prompts/
 ├── infra/
 │   ├── main.bicep
 │   └── parameters.json
@@ -916,7 +917,7 @@ job-tracker/
 - 2026-03-18: Project planned, architecture designed, TIMELINE.md created
 - 2026-03-18: Completed design steps 1–3 (user flow, data model, API contract)
 - 2026-03-18: Added design rationale (why decisions were made for Steps 1–3), expanded API contract with full request/response examples, synced TIMELINE.md with current scope, removed stale data from TIMELINE.md
-- 2026-03-19: Reviewed and completed Step 3 (API contract) — resolved gaps: file replacement/overwrite behaviour, deleted app listing endpoint, individual file delete endpoint, stats exclusion of deleted apps, 401/403 via SWA gateway. Completed Step 4 (File Upload Architecture) — CORS, blob PUT headers, client-side validation, SAS issuance validation, processUpload fileType derivation, upload completion polling, failure handling, progress bar, concurrent uploads.
+- 2026-03-19: Reviewed and completed Step 3 (API contract) — resolved gaps: file replacement/overwrite behaviour, deleted app listing endpoint, individual file delete endpoint, stats exclusion of deleted apps, and explicit 401/403 handling. Completed Step 4 (File Upload Architecture) — CORS, blob PUT headers, client-side validation, SAS issuance validation, processUpload fileType derivation, upload completion polling, failure handling, progress bar, concurrent uploads.
 - 2026-03-19: Completed Step 5 (Event-Driven Pipeline) — chose Blob Storage system topic, single Event Grid subscription, Event Grid Schema, Event Grid trigger binding, BlobCreated-only filtering, dead-letter container, and default retry policy with idempotent processUpload expectations.
 - 2026-03-19: Completed Step 6 (Authentication & Security) — locked SWA built-in GitHub auth, private owner-only route access, no browser API keys or custom JWT flow in v1, and pragmatic in-function throttling for sensitive API endpoints without adding APIM.
 - 2026-03-19: Planned Step 7 (Infrastructure & Deployment) — locked IaC topology/resources, Bicep structure and outputs, deployment sequencing expectations, and explicitly gated Phase 1 execution pending planning-doc review.
@@ -930,6 +931,7 @@ job-tracker/
 - 2026-03-21: Phase 3 complete — deployed Function App to Azure (all 16 functions), enabled Event Grid subscription, E2E verified full upload pipeline (SAS token → blob PUT → Event Grid → processUpload → Cosmos update), verified re-upload (latest wins), download SAS, and file delete. Fixed: missing STORAGE_ACCOUNT_KEY env var (added to Bicep), processUpload `getProperties()` crash on Event Grid retry (added 404 try/catch), function registration glob issue (created `src/index.ts` single entry point). Dead-letter configured and verified (deadletter container, 30 retries, 24hr TTL).
 - 2026-03-22: Phase 4 frontend — fixed all remaining deferred defects from code review: H-4 (removed redundant status), H-6 (formatApiError helper for field-level validation errors in toasts), M-2 (login page text), M-3 (empty table state with CTA), M-7 (ARIA sort headers), M-8 (ARIA file indicators), L-1 (per-card isRestoring), L-4 (replaced all emojis with Lucide React icons across 8 files), T-12 (added missing MSW handlers for interview CRUD and file delete). 35 tests passing, 0 TypeScript errors.
 - 2026-03-22: Dashboard improvements — redesigned InterviewChart from flat "Interviews by Type" to "Interview Pipeline" with numbered stage progression (Phone Screen → Take Home Test → Technical → Behavioral → Case Study → Panel → Other), connector lines, and colored indicators. Fixed browser fetch caching (`cache: "no-store"` on all API calls). Added new DropoffChart component showing where applications ended/stalled ("No Response", "Pre-Interview", or by last interview stage). Updated backend getStats endpoint with `outcomesByStage` field. 35 frontend tests, 266 backend tests passing.
+- 2026-03-22: Phase 4 marked complete and Phase 5 kicked off. Added detailed CI/CD plan at `docs/phase-5-cicd-deployment-plan.md` and aligned deployment/status references across docs.
 
 ---
 

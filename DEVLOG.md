@@ -512,3 +512,32 @@ Each entry records what was done, on which machine, with which AI tool, and what
 **Blockers:** None
 
 **Next session:** Continue Phase 4 polish or begin Phase 5 — CI/CD & Deployment.
+
+---
+
+## 2026-03-22 — Work Laptop (GitHub Copilot) — Session 3
+
+**What was done:**
+
+- Marked Phase 4 complete and shifted active focus to Phase 5 in project context docs
+- Created detailed Phase 5 execution plan at `docs/phase-5-cicd-deployment-plan.md` including:
+  - CI/CD deliverables and quality gates
+  - GitHub secrets and environment variable requirements
+  - Backend deployment strategy decision options
+  - Production smoke-test and rollback checklist
+  - Definition of done and risk mitigations
+- Performed cross-document consistency pass and corrected mismatches:
+  - Updated CLAUDE.md current status and "currently working on"
+  - Updated CLAUDE.md deploy command note to manual path while CI/CD is being implemented
+  - Updated CLAUDE.md project structure to match current repo (no workflow file yet)
+  - Updated TIMELINE.md Phase 5 section with reference to the new detailed plan
+  - Updated SOLUTION.md project structure to indicate workflow folder is Phase 5 work
+  - Updated docs/development-modes.md wording so GitHub Actions deployment is described as post-setup
+
+**Decisions made:**
+
+- Keep backend deployment strategy as a tracked Phase 5 decision (manual now vs automated in a follow-up workflow) while prioritizing frontend CI/CD first
+
+**Blockers:** None
+
+**Next session:** Implement `.github/workflows/azure-static-web-apps.yml`, configure repo secrets, run first deployment, and execute the production smoke-test checklist.
