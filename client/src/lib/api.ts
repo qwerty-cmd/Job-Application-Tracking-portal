@@ -32,6 +32,7 @@ async function request<T>(
     const options: RequestInit = {
       method,
       credentials: "include",
+      cache: "no-store",
       headers: { "Content-Type": "application/json" },
     };
 
