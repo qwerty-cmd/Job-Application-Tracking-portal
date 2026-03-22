@@ -6,7 +6,9 @@ import {
 } from "@azure/functions";
 import { BlobSASPermissions } from "@azure/storage-blob";
 import { requireOwner } from "../../shared/auth.js";
+import { createLogger, serializeError } from "../../shared/logger.js";
 import { getContainer } from "../../shared/cosmosClient.js";
+import { trackEvent, trackMetric } from "../../shared/telemetry.js";
 import { getBlobServiceClient } from "../../shared/storageClient.js";
 import { validateSasTokenRequest } from "../../shared/validation.js";
 import {
@@ -24,10 +26,18 @@ import {
 
 async function uploadSasToken(
   req: HttpRequest,
-  _context: InvocationContext,
+  context: InvocationContext,
 ): Promise<HttpResponseInit> {
+  const log = createLogger(context);
+  const startedAt = Date.now();
+  log.info("Request started", {
+    method: req.method,
+    url: req.url,
+    routeParams: req.params,
+    contentLength: req.headers.get("content-length"),
+  });
   // 1. Auth check
-  const authError = requireOwner(req);
+  const authError = requireOwner(req, log);
   if (authError) return authError;
 
   try {
@@ -53,9 +63,17 @@ async function uploadSasToken(
 
     // 4. Verify application exists and is not soft-deleted
     const container = getContainer();
-    const { resource } = await container
+    const readStart = Date.now();
+    const { resource, requestCharge: readRequestCharge } = await container
       .item(applicationId, applicationId)
       .read<Application>();
+    trackMetric("CosmosRequestCharge", readRequestCharge ?? 0);
+    log.info("Cosmos read", {
+      operation: "read",
+      partitionKey: applicationId,
+      requestCharge: readRequestCharge,
+      durationMs: Date.now() - readStart,
+    });
 
     if (!resource || resource.isDeleted) {
       return notFoundError(`Application ${applicationId} not found`);
@@ -76,14 +94,37 @@ async function uploadSasToken(
       permissions: BlobSASPermissions.parse("cw"),
       expiresOn,
     });
+    log.info("Upload SAS generated", {
+      applicationId,
+      fileType,
+      fileName,
+      blobPath,
+      expiresAt: expiresOn.toISOString(),
+    });
+    trackEvent("UploadSasIssued", {
+      applicationId,
+      fileType,
+      fileName,
+      expiresAt: expiresOn.toISOString(),
+    });
 
     // 6. Return 200
+    log.info("Request completed", {
+      status: 200,
+      durationMs: Date.now() - startedAt,
+      applicationId,
+      fileType,
+    });
     return successResponse({
       uploadUrl,
       blobPath,
       expiresAt: expiresOn.toISOString(),
     });
-  } catch {
+  } catch (err) {
+    log.error("Unhandled error", {
+      error: serializeError(err),
+      durationMs: Date.now() - startedAt,
+    });
     return serverError();
   }
 }

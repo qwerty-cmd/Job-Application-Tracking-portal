@@ -6,6 +6,8 @@ import {
 } from "@azure/functions";
 import { BlobSASPermissions } from "@azure/storage-blob";
 import { requireOwner } from "../../shared/auth.js";
+import { createLogger, serializeError } from "../../shared/logger.js";
+import { trackMetric } from "../../shared/telemetry.js";
 import { getContainer } from "../../shared/cosmosClient.js";
 import { getBlobServiceClient } from "../../shared/storageClient.js";
 import {
@@ -23,10 +25,18 @@ import {
 
 async function downloadSasToken(
   req: HttpRequest,
-  _context: InvocationContext,
+  context: InvocationContext,
 ): Promise<HttpResponseInit> {
+  const log = createLogger(context);
+  const startedAt = Date.now();
+  log.info("Request started", {
+    method: req.method,
+    url: req.url,
+    routeParams: req.params,
+    contentLength: req.headers.get("content-length"),
+  });
   // 1. Auth check
-  const authError = requireOwner(req);
+  const authError = requireOwner(req, log);
   if (authError) return authError;
 
   try {
@@ -52,9 +62,15 @@ async function downloadSasToken(
 
     // 3. Look up application in Cosmos
     const container = getContainer();
-    const { resource } = await container
+    const { resource, requestCharge } = await container
       .item(applicationId!, applicationId!)
       .read<Application>();
+    trackMetric("CosmosRequestCharge", requestCharge ?? 0);
+    log.info("Cosmos read", {
+      operation: "read",
+      partitionKey: applicationId,
+      requestCharge,
+    });
 
     if (!resource || resource.isDeleted) {
       return notFoundError(`Application ${applicationId} not found`);
@@ -90,6 +106,13 @@ async function downloadSasToken(
       permissions: BlobSASPermissions.parse("r"),
       expiresOn,
     });
+    log.info("Download SAS generated", {
+      applicationId,
+      fileType: validatedFileType,
+      containerName,
+      blobName,
+      expiresAt: expiresOn.toISOString(),
+    });
 
     // 7. Return response
     return successResponse({
@@ -97,7 +120,11 @@ async function downloadSasToken(
       fileName: fileMeta.fileName,
       expiresAt: expiresOn.toISOString(),
     });
-  } catch {
+  } catch (err) {
+    log.error("Unhandled error", {
+      error: serializeError(err),
+      durationMs: Date.now() - startedAt,
+    });
     return serverError();
   }
 }

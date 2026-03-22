@@ -5,6 +5,8 @@ import {
   InvocationContext,
 } from "@azure/functions";
 import { requireOwner } from "../../shared/auth.js";
+import { createLogger, serializeError } from "../../shared/logger.js";
+import { trackMetric } from "../../shared/telemetry.js";
 import { getContainer } from "../../shared/cosmosClient.js";
 import {
   successResponse,
@@ -16,10 +18,18 @@ import { Application } from "../../shared/types.js";
 
 async function getApplication(
   req: HttpRequest,
-  _context: InvocationContext,
+  context: InvocationContext,
 ): Promise<HttpResponseInit> {
+  const log = createLogger(context);
+  const startedAt = Date.now();
+  log.info("Request started", {
+    method: req.method,
+    url: req.url,
+    routeParams: req.params,
+    contentLength: req.headers.get("content-length"),
+  });
   // 1. Auth check
-  const authError = requireOwner(req);
+  const authError = requireOwner(req, log);
   if (authError) return authError;
 
   try {
@@ -27,7 +37,15 @@ async function getApplication(
     const id = req.params.id;
 
     // 3. Point read from Cosmos (partition key is /id)
-    const { resource } = await getContainer().item(id, id).read<Application>();
+    const { resource, requestCharge } = await getContainer()
+      .item(id, id)
+      .read<Application>();
+    trackMetric("CosmosRequestCharge", requestCharge ?? 0);
+    log.info("Cosmos read", {
+      operation: "read",
+      partitionKey: id,
+      requestCharge,
+    });
 
     // 4. Not found
     if (!resource) {
@@ -49,7 +67,11 @@ async function getApplication(
 
     // 7. Return success
     return successResponse(application);
-  } catch {
+  } catch (err) {
+    log.error("Unhandled error", {
+      error: serializeError(err),
+      durationMs: Date.now() - startedAt,
+    });
     return serverError();
   }
 }

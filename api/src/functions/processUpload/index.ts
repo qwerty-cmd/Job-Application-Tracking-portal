@@ -1,6 +1,8 @@
 import { app, EventGridEvent, InvocationContext } from "@azure/functions";
 import { BlobServiceClient } from "@azure/storage-blob";
 import { getContainer } from "../../shared/cosmosClient.js";
+import { createLogger, serializeError } from "../../shared/logger.js";
+import { trackEvent, trackMetric } from "../../shared/telemetry.js";
 import {
   getBlobServiceClient,
   getStorageAccountName,
@@ -105,134 +107,201 @@ async function processUpload(
   event: EventGridEvent,
   context: InvocationContext,
 ): Promise<void> {
-  // 1. Parse blob path from event subject
-  const parsed = parseBlobPath(event.subject);
-  if (!parsed) {
-    context.log(`Skipping event — unable to parse subject: ${event.subject}`);
-    return;
-  }
-
-  const { containerName, blobName, applicationId, timestamp, fileName } =
-    parsed;
-
-  // 2. Filter to valid upload containers only
-  if (!VALID_CONTAINERS.has(containerName)) {
-    context.log(
-      `Skipping event — container "${containerName}" is not an upload container`,
-    );
-    return;
-  }
-
-  const fileType = CONTAINER_TO_FILE_TYPE[containerName];
-  const fieldName = FILE_TYPE_TO_FIELD[fileType];
-  const blobServiceClient = getBlobServiceClient();
-
-  // 3. Check blob size (defence in depth — SAS already limits to 10 MB)
-  const containerClient = blobServiceClient.getContainerClient(containerName);
-  const blockBlobClient = containerClient.getBlockBlobClient(blobName);
-
-  let properties;
+  const log = createLogger(context);
+  const startedAt = Date.now();
+  log.info("Event received", {
+    eventType: event.eventType,
+    subject: event.subject,
+  });
   try {
-    properties = await blockBlobClient.getProperties();
-  } catch (err: unknown) {
-    // Blob may have been deleted (e.g. re-upload overwrote it, lifecycle policy)
-    // Event Grid retries can deliver events for blobs that no longer exist
-    const statusCode = (err as { statusCode?: number }).statusCode;
-    if (statusCode === 404) {
-      context.log(
-        `Blob not found (already deleted): ${containerName}/${blobName} — skipping`,
-      );
+    // 1. Parse blob path from event subject
+    const parsed = parseBlobPath(event.subject);
+    if (!parsed) {
+      log.warn("Unable to parse event subject", { subject: event.subject });
       return;
     }
-    throw err;
-  }
 
-  if (properties.contentLength && properties.contentLength > MAX_FILE_SIZE) {
-    context.log(
-      `Deleting oversized blob: ${containerName}/${blobName} (${properties.contentLength} bytes)`,
-    );
-    await blockBlobClient.deleteIfExists();
-    return;
-  }
+    const { containerName, blobName, applicationId, timestamp, fileName } =
+      parsed;
 
-  // 4. Validate content via magic bytes
-  const ext = getFileExtension(fileName);
-  const validator = EXTENSION_VALIDATORS[ext];
-  if (validator) {
-    const header = await readBlobHeader(
-      blobServiceClient,
-      containerName,
-      blobName,
-    );
-    if (!validator(header)) {
-      context.log(`Content mismatch for ${fileName} — deleting blob`);
+    // 2. Filter to valid upload containers only
+    if (!VALID_CONTAINERS.has(containerName)) {
+      log.info("Skipping non-upload container", { containerName });
+      return;
+    }
+
+    const fileType = CONTAINER_TO_FILE_TYPE[containerName];
+    const fieldName = FILE_TYPE_TO_FIELD[fileType];
+    const blobServiceClient = getBlobServiceClient();
+
+    // 3. Check blob size (defence in depth — SAS already limits to 10 MB)
+    const containerClient = blobServiceClient.getContainerClient(containerName);
+    const blockBlobClient = containerClient.getBlockBlobClient(blobName);
+
+    let properties;
+    try {
+      properties = await blockBlobClient.getProperties();
+    } catch (err: unknown) {
+      // Blob may have been deleted (e.g. re-upload overwrote it, lifecycle policy)
+      // Event Grid retries can deliver events for blobs that no longer exist
+      const statusCode = (err as { statusCode?: number }).statusCode;
+      if (statusCode === 404) {
+        log.info("Blob already deleted — skipping", {
+          containerName,
+          blobName,
+        });
+        return;
+      }
+      throw err;
+    }
+
+    if (properties.contentLength && properties.contentLength > MAX_FILE_SIZE) {
+      log.warn("Deleting oversized blob", {
+        containerName,
+        blobName,
+        size: properties.contentLength,
+      });
       await blockBlobClient.deleteIfExists();
       return;
     }
-  }
 
-  // 5. Read application from Cosmos
-  const cosmosContainer = getContainer();
-  const { resource } = await cosmosContainer
-    .item(applicationId, applicationId)
-    .read<Application>();
+    // 4. Validate content via magic bytes
+    const ext = getFileExtension(fileName);
+    const validator = EXTENSION_VALIDATORS[ext];
+    if (validator) {
+      const header = await readBlobHeader(
+        blobServiceClient,
+        containerName,
+        blobName,
+      );
+      if (!validator(header)) {
+        log.warn("Content mismatch — deleting blob", {
+          fileName,
+          containerName,
+          blobName,
+        });
+        await blockBlobClient.deleteIfExists();
+        return;
+      }
+    }
 
-  // 6. Skip if application doesn't exist or is soft-deleted
-  if (!resource) {
-    context.log(`Application ${applicationId} not found — skipping`);
-    return;
-  }
-  if (resource.isDeleted) {
-    context.log(`Application ${applicationId} is soft-deleted — skipping`);
-    return;
-  }
+    // 5. Read application from Cosmos
+    const cosmosContainer = getContainer();
+    const { resource, requestCharge } = await cosmosContainer
+      .item(applicationId, applicationId)
+      .read<Application>();
+    log.info("Cosmos read", {
+      operation: "read",
+      partitionKey: applicationId,
+      requestCharge,
+      applicationId,
+    });
+    trackMetric("CosmosRequestCharge", requestCharge ?? 0);
 
-  // 7. "Latest wins" — skip if existing file is newer
-  const existingFile = resource[fieldName] as {
-    blobUrl: string;
-    fileName: string;
-    uploadedAt: string;
-  } | null;
-
-  if (existingFile) {
-    const existingTime = new Date(existingFile.uploadedAt).getTime();
-    if (timestamp <= existingTime) {
-      context.log(`Skipping older upload (${timestamp} <= ${existingTime})`);
+    // 6. Skip if application doesn't exist or is soft-deleted
+    if (!resource) {
+      log.warn("Application not found — skipping", { applicationId });
       return;
     }
-  }
-
-  // 8. Build the blob URL and update Cosmos
-  const blobUrl = `https://${getStorageAccountName()}.blob.core.windows.net/${containerName}/${blobName}`;
-  const now = new Date().toISOString();
-  const updated = {
-    ...resource,
-    [fieldName]: {
-      blobUrl,
-      fileName,
-      uploadedAt: now,
-    },
-    updatedAt: now,
-  };
-
-  await cosmosContainer.item(applicationId, applicationId).replace(updated);
-
-  // 9. Delete old blob (non-fatal — lifecycle policy is the safety net)
-  if (existingFile) {
-    try {
-      const oldUrl = new URL(existingFile.blobUrl);
-      const oldPathParts = oldUrl.pathname.split("/").filter(Boolean);
-      const oldContainerName = oldPathParts[0];
-      const oldBlobName = oldPathParts.slice(1).join("/");
-
-      const oldContainerClient =
-        blobServiceClient.getContainerClient(oldContainerName);
-      const oldBlobClient = oldContainerClient.getBlockBlobClient(oldBlobName);
-      await oldBlobClient.deleteIfExists();
-    } catch {
-      // "blob not found" on old blob deletion is treated as success (idempotency)
-      context.log(`Non-fatal: failed to delete old blob for ${applicationId}`);
+    if (resource.isDeleted) {
+      log.info("Application soft-deleted — skipping", { applicationId });
+      return;
     }
+
+    // 7. "Latest wins" — skip if existing file is newer
+    const existingFile = resource[fieldName] as {
+      blobUrl: string;
+      fileName: string;
+      uploadedAt: string;
+    } | null;
+
+    if (existingFile) {
+      const existingTime = new Date(existingFile.uploadedAt).getTime();
+      if (timestamp <= existingTime) {
+        log.info("Skipping older upload", {
+          timestamp,
+          existingTime,
+          applicationId,
+        });
+        return;
+      }
+    }
+
+    // 8. Build the blob URL and update Cosmos
+    const blobUrl = `https://${getStorageAccountName()}.blob.core.windows.net/${containerName}/${blobName}`;
+    const now = new Date().toISOString();
+    const updated = {
+      ...resource,
+      [fieldName]: {
+        blobUrl,
+        fileName,
+        uploadedAt: now,
+      },
+      updatedAt: now,
+    };
+
+    const replaceStart = Date.now();
+    const { requestCharge: replaceRequestCharge } = await cosmosContainer
+      .item(applicationId, applicationId)
+      .replace(updated);
+    log.info("Cosmos replace", {
+      operation: "replace",
+      partitionKey: applicationId,
+      requestCharge: replaceRequestCharge,
+      durationMs: Date.now() - replaceStart,
+      applicationId,
+      fileType,
+      fileName,
+    });
+    trackMetric("CosmosRequestCharge", replaceRequestCharge ?? 0);
+    trackEvent("FileUploaded", {
+      applicationId,
+      fileType,
+      fileName,
+      contentLength: properties.contentLength,
+    });
+
+    // 9. Delete old blob (non-fatal — lifecycle policy is the safety net)
+    if (existingFile) {
+      try {
+        const oldUrl = new URL(existingFile.blobUrl);
+        const oldPathParts = oldUrl.pathname.split("/").filter(Boolean);
+        const oldContainerName = oldPathParts[0];
+        const oldBlobName = oldPathParts.slice(1).join("/");
+
+        const oldContainerClient =
+          blobServiceClient.getContainerClient(oldContainerName);
+        const oldBlobClient =
+          oldContainerClient.getBlockBlobClient(oldBlobName);
+        await oldBlobClient.deleteIfExists();
+        log.info("Deleted previous blob", {
+          oldContainerName,
+          oldBlobName,
+          applicationId,
+          fileType,
+        });
+      } catch (err) {
+        // "blob not found" on old blob deletion is treated as success (idempotency)
+        log.warn("Non-fatal: failed to delete old blob", {
+          error: serializeError(err),
+          applicationId,
+        });
+      }
+    }
+    log.info("Event processed", {
+      durationMs: Date.now() - startedAt,
+      applicationId,
+      fileType,
+      containerName,
+      blobName,
+    });
+  } catch (err) {
+    log.error("Unhandled processUpload error", {
+      error: serializeError(err),
+      durationMs: Date.now() - startedAt,
+      subject: event.subject,
+    });
+    throw err;
   }
 }
 

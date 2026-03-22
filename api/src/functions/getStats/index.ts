@@ -5,6 +5,8 @@ import {
   InvocationContext,
 } from "@azure/functions";
 import { requireOwner } from "../../shared/auth.js";
+import { createLogger, serializeError } from "../../shared/logger.js";
+import { trackMetric } from "../../shared/telemetry.js";
 import { getContainer } from "../../shared/cosmosClient.js";
 import { successResponse, serverError } from "../../shared/response.js";
 import {
@@ -32,10 +34,18 @@ function getDefaultTo(): string {
 
 async function getStats(
   req: HttpRequest,
-  _context: InvocationContext,
+  context: InvocationContext,
 ): Promise<HttpResponseInit> {
+  const log = createLogger(context);
+  const startedAt = Date.now();
+  log.info("Request started", {
+    method: req.method,
+    url: req.url,
+    routeParams: req.params,
+    contentLength: req.headers.get("content-length"),
+  });
   // 1. Auth check
-  const authError = requireOwner(req);
+  const authError = requireOwner(req, log);
   if (authError) return authError;
 
   try {
@@ -51,9 +61,15 @@ async function getStats(
       { name: "@to", value: to },
     ];
 
-    const { resources } = await getContainer()
+    const { resources, requestCharge } = await getContainer()
       .items.query<Application>({ query, parameters })
       .fetchAll();
+    trackMetric("CosmosRequestCharge", requestCharge ?? 0);
+    log.info("Cosmos query", {
+      operation: "query",
+      requestCharge,
+      resultCount: resources.length,
+    });
 
     // 4. Aggregate by status
     const byStatus: Record<string, number> = {};
@@ -112,7 +128,11 @@ async function getStats(
       interviewsByType,
       outcomesByStage,
     });
-  } catch {
+  } catch (err) {
+    log.error("Unhandled error", {
+      error: serializeError(err),
+      durationMs: Date.now() - startedAt,
+    });
     return serverError();
   }
 }

@@ -5,6 +5,8 @@ import {
   InvocationContext,
 } from "@azure/functions";
 import { requireOwner } from "../../shared/auth.js";
+import { createLogger, serializeError } from "../../shared/logger.js";
+import { trackMetric } from "../../shared/telemetry.js";
 import { getContainer } from "../../shared/cosmosClient.js";
 import {
   successResponse,
@@ -19,10 +21,18 @@ import { validateUpdateInterview } from "../../shared/validation.js";
 
 async function updateInterview(
   req: HttpRequest,
-  _context: InvocationContext,
+  context: InvocationContext,
 ): Promise<HttpResponseInit> {
+  const log = createLogger(context);
+  const startedAt = Date.now();
+  log.info("Request started", {
+    method: req.method,
+    url: req.url,
+    routeParams: req.params,
+    contentLength: req.headers.get("content-length"),
+  });
   // 1. Auth check
-  const authError = requireOwner(req);
+  const authError = requireOwner(req, log);
   if (authError) return authError;
 
   try {
@@ -47,7 +57,15 @@ async function updateInterview(
 
     // 4. Point read application
     const container = getContainer();
-    const { resource } = await container.item(id, id).read<Application>();
+    const { resource, requestCharge } = await container
+      .item(id, id)
+      .read<Application>();
+    trackMetric("CosmosRequestCharge", requestCharge ?? 0);
+    log.info("Cosmos read", {
+      operation: "read",
+      partitionKey: id,
+      requestCharge,
+    });
 
     if (!resource || resource.isDeleted) {
       return notFoundError(`Application ${id} not found`);
@@ -90,7 +108,15 @@ async function updateInterview(
       updatedAt: now,
     };
 
-    const { resource: saved } = await container.item(id, id).replace(updated);
+    const { resource: saved, requestCharge: replaceCharge } = await container
+      .item(id, id)
+      .replace(updated);
+    trackMetric("CosmosRequestCharge", replaceCharge ?? 0);
+    log.info("Cosmos replace", {
+      operation: "replace",
+      partitionKey: id,
+      requestCharge: replaceCharge,
+    });
 
     // 8. Strip blobUrl and return
     const application = {
@@ -101,7 +127,11 @@ async function updateInterview(
     };
 
     return successResponse(application);
-  } catch {
+  } catch (err) {
+    log.error("Unhandled error", {
+      error: serializeError(err),
+      durationMs: Date.now() - startedAt,
+    });
     return serverError();
   }
 }

@@ -5,6 +5,8 @@ import {
   InvocationContext,
 } from "@azure/functions";
 import { requireOwner } from "../../shared/auth.js";
+import { createLogger, serializeError } from "../../shared/logger.js";
+import { trackEvent, trackMetric } from "../../shared/telemetry.js";
 import { getContainer } from "../../shared/cosmosClient.js";
 import { getBlobServiceClient } from "../../shared/storageClient.js";
 import {
@@ -22,10 +24,18 @@ import {
 
 async function deleteFile(
   req: HttpRequest,
-  _context: InvocationContext,
+  context: InvocationContext,
 ): Promise<HttpResponseInit> {
+  const log = createLogger(context);
+  const startedAt = Date.now();
+  log.info("Request started", {
+    method: req.method,
+    url: req.url,
+    routeParams: req.params,
+    contentLength: req.headers.get("content-length"),
+  });
   // 1. Auth check
-  const authError = requireOwner(req);
+  const authError = requireOwner(req, log);
   if (authError) return authError;
 
   try {
@@ -46,7 +56,15 @@ async function deleteFile(
 
     // 3. Look up application in Cosmos
     const container = getContainer();
-    const { resource } = await container.item(id, id).read<Application>();
+    const { resource, requestCharge } = await container
+      .item(id, id)
+      .read<Application>();
+    trackMetric("CosmosRequestCharge", requestCharge ?? 0);
+    log.info("Cosmos read", {
+      operation: "read",
+      partitionKey: id,
+      requestCharge,
+    });
 
     if (!resource || resource.isDeleted) {
       return notFoundError(`Application ${id} not found`);
@@ -79,7 +97,19 @@ async function deleteFile(
       [fieldName]: null,
       updatedAt: now,
     };
-    await container.item(id, id).replace(updated);
+    const { requestCharge: replaceCharge } = await container
+      .item(id, id)
+      .replace(updated);
+    trackMetric("CosmosRequestCharge", replaceCharge ?? 0);
+    log.info("Cosmos replace", {
+      operation: "replace",
+      partitionKey: id,
+      requestCharge: replaceCharge,
+    });
+    trackEvent("FileDeleted", {
+      applicationId: id,
+      fileType: validatedFileType,
+    });
 
     // 7. Delete blob from storage (non-fatal if it fails — lifecycle policy catches orphans)
     try {
@@ -88,8 +118,14 @@ async function deleteFile(
         blobServiceClient.getContainerClient(containerName);
       const blockBlobClient = containerClient.getBlockBlobClient(blobName);
       await blockBlobClient.deleteIfExists();
-    } catch {
+      log.info("Blob deleted", { containerName, blobName, id, fileType: validatedFileType });
+    } catch (blobErr) {
       // Blob delete failure is non-fatal — 90-day lifecycle policy is the safety net
+      log.warn("Non-fatal blob delete failure", {
+        error: serializeError(blobErr),
+        id,
+        fileType: validatedFileType,
+      });
     }
 
     // 8. Return success
@@ -98,7 +134,11 @@ async function deleteFile(
       fileType: validatedFileType,
       deleted: true,
     });
-  } catch {
+  } catch (err) {
+    log.error("Unhandled error", {
+      error: serializeError(err),
+      durationMs: Date.now() - startedAt,
+    });
     return serverError();
   }
 }
