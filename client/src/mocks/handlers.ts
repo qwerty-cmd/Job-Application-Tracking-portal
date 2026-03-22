@@ -136,11 +136,39 @@ export const handlers = [
       Other: 0,
     };
     let totalInterviews = 0;
+    // outcomesByStage: where did ended/stalled applications land?
+    const outcomesByStage: Record<string, number> = {
+      "No Response": 0,
+      "Pre-Interview": 0,
+      "Phone Screen": 0,
+      "Take Home Test": 0,
+      Technical: 0,
+      Behavioral: 0,
+      "Case Study": 0,
+      Panel: 0,
+      Other: 0,
+    };
     for (const app of active) {
       byStatus[app.status] = (byStatus[app.status] ?? 0) + 1;
       for (const iv of app.interviews) {
         interviewsByType[iv.type] = (interviewsByType[iv.type] ?? 0) + 1;
         totalInterviews++;
+      }
+      // Classify ended/stalled applications
+      if (app.status === "Rejected" || app.status === "Withdrawn") {
+        if (app.interviews.length > 0) {
+          // Furthest interview stage reached
+          const last = app.interviews[app.interviews.length - 1];
+          outcomesByStage[last.type] = (outcomesByStage[last.type] ?? 0) + 1;
+        } else {
+          outcomesByStage["Pre-Interview"] += 1;
+        }
+      } else if (
+        app.status === "Applying" ||
+        app.status === "Application Submitted"
+      ) {
+        // No response yet
+        outcomesByStage["No Response"] += 1;
       }
     }
     const stats: StatsResponse = {
@@ -149,6 +177,7 @@ export const handlers = [
       byStatus,
       totalInterviews,
       interviewsByType,
+      outcomesByStage,
     };
     return HttpResponse.json({ data: stats, error: null });
   }),

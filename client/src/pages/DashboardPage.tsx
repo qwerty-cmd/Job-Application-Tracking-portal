@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SummaryCards } from "@/components/SummaryCards";
 import { StatusChart } from "@/components/StatusChart";
 import { InterviewChart } from "@/components/InterviewChart";
+import { DropoffChart } from "@/components/DropoffChart";
 import { useStats } from "@/hooks/useStats";
 
 export function DashboardPage() {
@@ -84,6 +85,8 @@ export function DashboardPage() {
         <StatusChart stats={stats} />
         <InterviewChart stats={stats} />
       </div>
+
+      <DropoffChart stats={stats} />
 
       <Card>
         <CardHeader>
