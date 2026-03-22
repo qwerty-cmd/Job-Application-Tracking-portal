@@ -85,6 +85,12 @@ describe("DeletedApplicationsPage", () => {
           error: null,
         });
       }),
+      http.patch("/api/applications/:id/restore", ({ params }) => {
+        return HttpResponse.json({
+          data: { id: params.id, isDeleted: false, deletedAt: null },
+          error: null,
+        });
+      }),
     );
 
     renderDeleted();
