@@ -1,6 +1,12 @@
 {
   "configurations": {
-    "app": {
+    "mock": {
+      "appLocation": "client",
+      "outputLocation": "dist",
+      "appDevserverUrl": "http://localhost:5173",
+      "run": "npm run dev"
+    },
+    "live-api": {
       "appLocation": "client",
       "outputLocation": "dist",
       "appDevserverUrl": "http://localhost:5173",

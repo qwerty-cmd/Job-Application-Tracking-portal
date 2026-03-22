@@ -30,8 +30,10 @@ This project supports three modes for running the application, from fully local 
 # Install dependencies (first time)
 cd client && npm install
 
-# Start with SWA CLI (recommended — provides mock auth)
-npx swa start http://localhost:5173 --run "npm run dev"
+# Start with SWA CLI using the "mock" config (recommended — provides mock auth)
+# IMPORTANT: Do NOT use apiDevserverUrl or apiLocation — SWA CLI would proxy
+# /api/* requests to the backend server, bypassing MSW entirely (causes 502).
+npx swa start --config-name mock
 # Open http://localhost:4280
 
 # Or start Vite directly (no mock auth — login will fail)
@@ -67,6 +69,10 @@ http.get(`${API_BASE}/applications/new-endpoint`, () => {
 - File upload SAS tokens return mock URLs that won't accept real blob PUTs
 - No real Cosmos DB queries — filtering, sorting, pagination are not fully simulated
 
+### Common pitfall: 502 Bad Gateway
+
+If you get a **502** on `/api/*` requests, SWA CLI is trying to proxy API calls to a backend server that isn't running. This happens when `apiDevserverUrl` or `apiLocation` is set in the SWA CLI config. The `mock` config in `swa-cli.config.json` deliberately omits these so that `/api/*` requests reach the browser where MSW intercepts them.
+
 ---
 
 ## Mode 2: Local Frontend + Live Azure Backend
@@ -94,12 +100,11 @@ http.get(`${API_BASE}/applications/new-endpoint`, () => {
 # 1. Create a .env.development.local file in client/
 cat > client/.env.development.local << 'EOF'
 VITE_API_URL=https://func-jobtracker.azurewebsites.net
+VITE_DISABLE_MSW=true
 EOF
 
-# 2. Start SWA CLI with the remote API
-npx swa start http://localhost:5173 \
-  --run "cd client && npm run dev" \
-  --api-devserver-url https://func-jobtracker.azurewebsites.net
+# 2. Start SWA CLI with the "live-api" config
+npx swa start --config-name live-api
 
 # Open http://localhost:4280
 ```
@@ -127,34 +132,9 @@ SWA CLI mock auth generates a `x-ms-client-principal` header. For the Function A
 
 ### Disabling MSW for this mode
 
-MSW is enabled by default in development mode. To prevent it from intercepting calls to the real API, either:
+The `.env.development.local` setup above includes `VITE_DISABLE_MSW=true`, which tells `main.tsx` to skip starting the MSW browser worker. This ensures API calls go through to the real Azure Functions backend instead of being intercepted by mock handlers.
 
-**Option A** — Set a flag in `.env.development.local`:
-
-```env
-VITE_API_URL=https://func-jobtracker.azurewebsites.net
-VITE_DISABLE_MSW=true
-```
-
-Then update `client/src/main.tsx`:
-
-```typescript
-async function enableMocking() {
-  if (import.meta.env.MODE !== "development") return;
-  if (import.meta.env.VITE_DISABLE_MSW === "true") return;
-  const { worker } = await import("./mocks/browser");
-  return worker.start({ onUnhandledRequest: "bypass" });
-}
-```
-
-**Option B** — Build and preview (runs in production mode, MSW is excluded):
-
-```bash
-cd client
-npm run build
-npm run preview
-# Then use SWA CLI with the preview server URL
-```
+If you forget this flag, MSW will intercept `/api/*` requests and return mock data even though a real backend is available.
 
 ---
 
@@ -291,7 +271,7 @@ az functionapp log tail --name func-jobtracker --resource-group job-tracker-rg
 | **Database**       | In-memory mocks     | Azure Cosmos DB                             | Azure Cosmos DB          |
 | **Storage**        | Mock SAS tokens     | Azure Blob Storage                          | Azure Blob Storage       |
 | **URL**            | `localhost:4280`    | `localhost:4280`                            | `*.azurestaticapps.net`  |
-| **Start command**  | `npx swa start ...` | `npx swa start ... --api-devserver-url ...` | Deployed via CI/CD       |
+| **Start command**  | `npx swa start --config-name mock` | `npx swa start --config-name live-api` | Deployed via CI/CD       |
 | **Use case**       | UI development      | Integration testing                         | Production               |
 | **Requires Azure** | No                  | Yes (Functions + DB)                        | Yes (all resources)      |
 

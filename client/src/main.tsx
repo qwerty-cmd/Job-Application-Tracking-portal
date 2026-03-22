@@ -9,6 +9,9 @@ async function enableMocking() {
   if (import.meta.env.MODE !== "development") {
     return;
   }
+  if (import.meta.env.VITE_DISABLE_MSW === "true") {
+    return;
+  }
   const { worker } = await import("./mocks/browser");
   return worker.start({ onUnhandledRequest: "bypass" });
 }
