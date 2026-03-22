@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import type { ClientPrincipal, AuthMeResponse } from "@/types";
+import { logger } from "@/lib/logger";
 
 interface AuthContextValue {
   user: ClientPrincipal | null;
@@ -29,14 +30,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const res = await fetch("/.auth/me");
         if (!res.ok) {
+          logger.warn("Auth check failed", { status: res.status });
           setUser(null);
           return;
         }
         const data: AuthMeResponse = await res.json();
         if (!cancelled) {
           setUser(data.clientPrincipal);
+          if (data.clientPrincipal) {
+            logger.info("Auth session restored", {
+              userId: data.clientPrincipal.userId,
+              identityProvider: data.clientPrincipal.identityProvider,
+              hasOwnerRole: data.clientPrincipal.userRoles.includes("owner"),
+            });
+            logger.event("SessionStarted", {
+              userId: data.clientPrincipal.userId,
+              identityProvider: data.clientPrincipal.identityProvider,
+            });
+          }
         }
-      } catch {
+      } catch (err) {
+        logger.error("Auth check threw exception", {
+          message: err instanceof Error ? err.message : "Unknown error",
+        });
         if (!cancelled) {
           setUser(null);
         }

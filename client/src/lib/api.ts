@@ -1,4 +1,5 @@
 import type { ApiResponse } from "@/types";
+import { logger } from "@/lib/logger";
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? "";
 
@@ -28,6 +29,7 @@ async function request<T>(
   url: string,
   body?: unknown,
 ): Promise<ApiResponse<T>> {
+  const startedAt = performance.now();
   try {
     const options: RequestInit = {
       method,
@@ -41,9 +43,25 @@ async function request<T>(
     }
 
     const res = await fetch(url, options);
+    const durationMs = Math.round(performance.now() - startedAt);
+    if (durationMs > 2000) {
+      logger.warn("Slow API call", {
+        method,
+        url,
+        status: res.status,
+        durationMs,
+      });
+    }
 
     const contentType = res.headers.get("content-type");
     if (!contentType?.includes("application/json")) {
+      logger.error("Unexpected non-JSON API response", {
+        method,
+        url,
+        status: res.status,
+        contentType: contentType ?? "",
+        durationMs,
+      });
       return networkError(`Unexpected response format (${res.status})`);
     }
 
@@ -51,6 +69,12 @@ async function request<T>(
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "An unexpected error occurred";
+    logger.error("API network error", {
+      method,
+      url,
+      message,
+      durationMs: Math.round(performance.now() - startedAt),
+    });
     return networkError(message);
   }
 }
