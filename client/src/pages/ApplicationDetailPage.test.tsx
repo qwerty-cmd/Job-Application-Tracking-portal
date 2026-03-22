@@ -147,4 +147,173 @@ describe("ApplicationDetailPage", () => {
 
     expect(screen.getByText(/rejection/i)).toBeInTheDocument();
   });
+
+  // --- InterviewModal pre-population tests (T-8) ---
+
+  it("opens edit modal with pre-populated interview data", async () => {
+    const user = userEvent.setup();
+    renderDetailPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Contoso Ltd")).toBeInTheDocument();
+    });
+
+    // Click the edit button on the interview card
+    const editButtons = screen.getAllByRole("button", { name: /edit/i });
+    await user.click(editButtons[0]);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: /edit interview/i }),
+      ).toBeInTheDocument();
+    });
+
+    // Modal description should mention the round and type
+    expect(
+      screen.getByText(/editing round 1 \(phone screen\)/i),
+    ).toBeInTheDocument();
+  });
+
+  it("shows 'Add Interview Round' title for new interview", async () => {
+    const user = userEvent.setup();
+    renderDetailPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Contoso Ltd")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: /add interview/i }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: /add interview round/i }),
+      ).toBeInTheDocument();
+    });
+  });
+
+  // --- FileSection tests (T-2, T-3, T-4) ---
+
+  it("shows file names for uploaded files", async () => {
+    renderDetailPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Contoso Ltd")).toBeInTheDocument();
+    });
+
+    // mock app has resume and cover letter
+    expect(screen.getByText("contoso-resume.pdf")).toBeInTheDocument();
+    expect(screen.getByText("contoso-cl.pdf")).toBeInTheDocument();
+  });
+
+  it("shows download button for uploaded files", async () => {
+    renderDetailPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Contoso Ltd")).toBeInTheDocument();
+    });
+
+    const downloadButtons = screen.getAllByRole("button", {
+      name: /download/i,
+    });
+    // Resume and cover letter both have download buttons
+    expect(downloadButtons.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("shows Remove button for uploaded files", async () => {
+    renderDetailPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Contoso Ltd")).toBeInTheDocument();
+    });
+
+    const removeButtons = screen.getAllByRole("button", { name: /remove/i });
+    // Resume and cover letter both have remove buttons
+    expect(removeButtons.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("shows Upload File button for file types with no upload", async () => {
+    renderDetailPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Contoso Ltd")).toBeInTheDocument();
+    });
+
+    // Job description has no file in the mock — should show upload button
+    const uploadButtons = screen.getAllByRole("button", {
+      name: /upload file/i,
+    });
+    expect(uploadButtons.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("shows delete confirmation dialog when clicking Remove", async () => {
+    const user = userEvent.setup();
+    renderDetailPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Contoso Ltd")).toBeInTheDocument();
+    });
+
+    // Click first Remove button (resume)
+    const removeButtons = screen.getAllByRole("button", { name: /remove/i });
+    await user.click(removeButtons[0]);
+
+    // Confirmation dialog should appear
+    await waitFor(() => {
+      expect(screen.getByText(/remove file/i)).toBeInTheDocument();
+    });
+    expect(screen.getByText(/cannot be undone/i)).toBeInTheDocument();
+
+    // Cancel should close the dialog
+    await user.click(screen.getByRole("button", { name: /cancel/i }));
+    await waitFor(() => {
+      expect(screen.queryByText(/cannot be undone/i)).not.toBeInTheDocument();
+    });
+  });
+
+  // --- Status change showing rejection (T-5) ---
+
+  it("shows rejection details with reason select and notes", async () => {
+    server.use(
+      http.get("/api/applications/:id", () => {
+        return HttpResponse.json({
+          data: {
+            ...mockApplication,
+            status: "Rejected",
+            rejection: {
+              reason: "Failed Technical",
+              notes: "System design was weak",
+            },
+          },
+          error: null,
+        });
+      }),
+    );
+
+    renderDetailPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Contoso Ltd")).toBeInTheDocument();
+    });
+
+    // Rejection section label visible
+    expect(screen.getByText(/rejection details/i)).toBeInTheDocument();
+
+    // Reason label and notes label
+    expect(screen.getByLabelText(/reason/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/notes/i)).toBeInTheDocument();
+  });
+
+  it("shows Re-upload button for files that already have uploads", async () => {
+    renderDetailPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Contoso Ltd")).toBeInTheDocument();
+    });
+
+    const reuploadButtons = screen.getAllByRole("button", {
+      name: /re-upload/i,
+    });
+    // Resume and cover letter both have re-upload buttons
+    expect(reuploadButtons.length).toBeGreaterThanOrEqual(2);
+  });
 });
