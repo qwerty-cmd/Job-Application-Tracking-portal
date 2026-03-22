@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import { api } from "@/lib/api";
+import { logger } from "@/lib/logger";
 import type {
   Application,
   FileType,
@@ -11,6 +12,11 @@ import { EXTENSION_CONTENT_TYPES } from "@/types";
 interface MutationState {
   isLoading: boolean;
   error: string | null;
+}
+
+function logMutationError(action: string, error: string | null): void {
+  if (!error) return;
+  logger.error("Mutation failed", { action, error });
 }
 
 // --- Application mutations ---
@@ -25,6 +31,14 @@ export function useCreateApplication() {
     setState({ isLoading: true, error: null });
     const res = await api.post<Application>("/api/applications", body);
     setState({ isLoading: false, error: res.error?.message ?? null });
+    logMutationError("create-application", res.error?.message ?? null);
+    if (!res.error && res.data) {
+      logger.event("ApplicationCreated", {
+        applicationId: res.data.id,
+        company: res.data.company,
+        role: res.data.role,
+      });
+    }
     return res;
   }, []);
 
@@ -42,6 +56,7 @@ export function useUpdateApplication() {
       setState({ isLoading: true, error: null });
       const res = await api.patch<Application>(`/api/applications/${id}`, body);
       setState({ isLoading: false, error: res.error?.message ?? null });
+      logMutationError("update-application", res.error?.message ?? null);
       return res;
     },
     [],
@@ -62,6 +77,10 @@ export function useDeleteApplication() {
       `/api/applications/${id}`,
     );
     setState({ isLoading: false, error: res.error?.message ?? null });
+    logMutationError("delete-application", res.error?.message ?? null);
+    if (!res.error) {
+      logger.event("ApplicationDeleted", { applicationId: id });
+    }
     return res;
   }, []);
 
@@ -81,6 +100,10 @@ export function useRestoreApplication() {
       {},
     );
     setState({ isLoading: false, error: res.error?.message ?? null });
+    logMutationError("restore-application", res.error?.message ?? null);
+    if (!res.error) {
+      logger.event("ApplicationRestored", { applicationId: id });
+    }
     return res;
   }, []);
 
@@ -103,6 +126,14 @@ export function useAddInterview() {
         body,
       );
       setState({ isLoading: false, error: res.error?.message ?? null });
+      logMutationError("add-interview", res.error?.message ?? null);
+      if (!res.error) {
+        logger.event("InterviewAdded", {
+          applicationId,
+          type: body.type as string,
+          outcome: body.outcome as string,
+        });
+      }
       return res;
     },
     [],
@@ -129,6 +160,10 @@ export function useUpdateInterview() {
         body,
       );
       setState({ isLoading: false, error: res.error?.message ?? null });
+      logMutationError("update-interview", res.error?.message ?? null);
+      if (!res.error) {
+        logger.event("InterviewUpdated", { applicationId, interviewId });
+      }
       return res;
     },
     [],
@@ -150,6 +185,10 @@ export function useDeleteInterview() {
         `/api/applications/${applicationId}/interviews/${interviewId}`,
       );
       setState({ isLoading: false, error: res.error?.message ?? null });
+      logMutationError("delete-interview", res.error?.message ?? null);
+      if (!res.error) {
+        logger.event("InterviewDeleted", { applicationId, interviewId });
+      }
       return res;
     },
     [],
@@ -172,6 +211,13 @@ export function useReorderInterviews() {
         { order },
       );
       setState({ isLoading: false, error: res.error?.message ?? null });
+      logMutationError("reorder-interviews", res.error?.message ?? null);
+      if (!res.error) {
+        logger.event("InterviewsReordered", {
+          applicationId,
+          count: order.length,
+        });
+      }
       return res;
     },
     [],
@@ -204,6 +250,12 @@ export function useUploadFile() {
         EXTENSION_CONTENT_TYPES[ext] ?? "application/octet-stream";
 
       // 1. Request SAS token
+      logger.event("FileUploadStarted", {
+        applicationId,
+        fileType,
+        fileName: file.name,
+        size: file.size,
+      });
       const sasRes = await api.post<UploadSasTokenResponse>(
         "/api/upload/sas-token",
         {
@@ -219,6 +271,7 @@ export function useUploadFile() {
           isLoading: false,
           error: sasRes.error?.message ?? "Failed to get upload URL",
         });
+        logMutationError("upload-file:sas", sasRes.error?.message ?? null);
         return false;
       }
 
@@ -238,17 +291,42 @@ export function useUploadFile() {
 
           xhr.onload = () => {
             if (xhr.status >= 200 && xhr.status < 300) {
+              logger.event("FileUploadCompleted", {
+                applicationId,
+                fileType,
+                fileName: file.name,
+                status: xhr.status,
+              });
               resolve();
             } else {
+              logger.error("File upload failed", {
+                applicationId,
+                fileType,
+                fileName: file.name,
+                status: xhr.status,
+              });
               reject(new Error(`Upload failed with status ${xhr.status}`));
             }
           };
 
-          xhr.onerror = () => reject(new Error("Upload failed"));
+          xhr.onerror = () => {
+            logger.error("File upload XHR network error", {
+              applicationId,
+              fileType,
+              fileName: file.name,
+            });
+            reject(new Error("Upload failed"));
+          };
           xhr.send(file);
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : "Upload failed";
+        logger.error("File upload failed", {
+          applicationId,
+          fileType,
+          fileName: file.name,
+          message,
+        });
         setState({ isLoading: false, error: message });
         setProgress(0);
         return false;
@@ -276,9 +354,11 @@ export function useDownloadFile() {
         res.data?.downloadUrl &&
         res.data.downloadUrl.startsWith("https://")
       ) {
+        logger.event("FileDownloadStarted", { applicationId, fileType });
         window.open(res.data.downloadUrl, "_blank", "noopener,noreferrer");
         return true;
       }
+      logMutationError("download-file", res.error?.message ?? null);
       return false;
     },
     [],
@@ -302,6 +382,10 @@ export function useDeleteFile() {
         deleted: boolean;
       }>(`/api/applications/${applicationId}/files/${fileType}`);
       setState({ isLoading: false, error: res.error?.message ?? null });
+      logMutationError("delete-file", res.error?.message ?? null);
+      if (!res.error) {
+        logger.event("FileDeleted", { applicationId, fileType });
+      }
       return res;
     },
     [],

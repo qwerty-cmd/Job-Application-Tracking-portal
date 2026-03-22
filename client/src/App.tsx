@@ -1,4 +1,5 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { useEffect } from "react";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { NavBar } from "@/components/NavBar";
@@ -8,6 +9,7 @@ import { ApplicationDetailPage } from "@/pages/ApplicationDetailPage";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { DeletedApplicationsPage } from "@/pages/DeletedApplicationsPage";
 import { Toaster } from "@/components/ui/sonner";
+import { logger } from "@/lib/logger";
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -20,6 +22,11 @@ function AppLayout({ children }: { children: React.ReactNode }) {
 
 function App() {
   const { isOwner, isLoading } = useAuth();
+  const location = useLocation();
+
+  useEffect(() => {
+    logger.event("PageViewed", { path: location.pathname });
+  }, [location.pathname]);
 
   return (
     <>
