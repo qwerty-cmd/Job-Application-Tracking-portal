@@ -91,8 +91,7 @@ async function getStats(
       if (app.status === "Rejected" || app.status === "Withdrawn") {
         if (app.interviews.length > 0) {
           const last = app.interviews[app.interviews.length - 1];
-          outcomesByStage[last.type] =
-            (outcomesByStage[last.type] ?? 0) + 1;
+          outcomesByStage[last.type] = (outcomesByStage[last.type] ?? 0) + 1;
         } else {
           outcomesByStage["Pre-Interview"] += 1;
         }
