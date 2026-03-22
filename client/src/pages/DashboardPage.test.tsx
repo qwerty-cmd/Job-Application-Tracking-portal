@@ -127,7 +127,9 @@ describe("DashboardPage", () => {
     // Mock stats: totalInterviews = 2
     expect(screen.getByText(/2 interviews conducted/i)).toBeInTheDocument();
     // Phone Screen appears in both Interview Pipeline and Dropoff chart
-    expect(screen.getAllByText("Phone Screen").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Phone Screen").length).toBeGreaterThanOrEqual(
+      1,
+    );
     expect(screen.getAllByText("Technical").length).toBeGreaterThanOrEqual(1);
   });
 
