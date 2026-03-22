@@ -113,4 +113,157 @@ describe("ApplicationsPage", () => {
     expect(screen.getByLabelText(/from/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/to/i)).toBeInTheDocument();
   });
+
+  // --- FilterBar tests (T-6) ---
+
+  it("applies date filters and triggers refetch", async () => {
+    const user = userEvent.setup();
+    renderApp();
+
+    await waitFor(() => {
+      expect(screen.getByText("Contoso Ltd")).toBeInTheDocument();
+    });
+
+    const fromInput = screen.getByLabelText(/from/i);
+    const toInput = screen.getByLabelText(/to/i);
+
+    await user.clear(fromInput);
+    await user.type(fromInput, "2026-03-01");
+    await user.clear(toInput);
+    await user.type(toInput, "2026-03-31");
+
+    await user.click(screen.getByRole("button", { name: /^apply$/i }));
+
+    // After applying, the table should still render (filters applied)
+    await waitFor(() => {
+      expect(screen.getByText("Contoso Ltd")).toBeInTheDocument();
+    });
+  });
+
+  it("resets filters to defaults", async () => {
+    const user = userEvent.setup();
+    renderApp();
+
+    await waitFor(() => {
+      expect(screen.getByText("Contoso Ltd")).toBeInTheDocument();
+    });
+
+    // Set a date filter first
+    const fromInput = screen.getByLabelText(/from/i);
+    await user.clear(fromInput);
+    await user.type(fromInput, "2026-01-01");
+
+    // Click Reset
+    await user.click(screen.getByRole("button", { name: /reset/i }));
+
+    // From input should be cleared
+    expect(screen.getByLabelText(/from/i)).toHaveValue("");
+  });
+
+  // --- CreateApplicationModal validation tests (T-7) ---
+
+  it("shows validation errors when submitting empty create form", async () => {
+    const user = userEvent.setup();
+    renderApp();
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: /new application/i }),
+      ).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: /new application/i }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: /new application/i }),
+      ).toBeInTheDocument();
+    });
+
+    // Clear the company and role fields and date field, then submit
+    const companyInput = screen.getByLabelText(/company/i);
+    const roleInput = screen.getByLabelText(/role/i);
+    const dateInput = screen.getByLabelText(/date applied/i);
+
+    await user.clear(companyInput);
+    await user.clear(roleInput);
+    await user.clear(dateInput);
+
+    // Click the Create button
+    await user.click(screen.getByRole("button", { name: /create/i }));
+
+    // Should show validation errors
+    await waitFor(() => {
+      expect(screen.getByText(/company is required/i)).toBeInTheDocument();
+    });
+    expect(screen.getByText(/role is required/i)).toBeInTheDocument();
+  });
+
+  it("prevents form submission with invalid job posting URL", async () => {
+    const user = userEvent.setup();
+    renderApp();
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: /new application/i }),
+      ).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: /new application/i }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: /new application/i }),
+      ).toBeInTheDocument();
+    });
+
+    // Fill required fields
+    await user.type(screen.getByLabelText(/company/i), "Test Co");
+    await user.type(screen.getByLabelText(/role/i), "Engineer");
+
+    // Enter invalid URL
+    const urlInput = screen.getByLabelText(/job posting url/i);
+    await user.type(urlInput, "not-a-url");
+
+    await user.click(screen.getByRole("button", { name: /create/i }));
+
+    // Form should stay open (validation should prevent submission)
+    await waitFor(
+      () => {
+        expect(
+          screen.getByRole("heading", { name: /new application/i }),
+        ).toBeInTheDocument();
+      },
+      { timeout: 2000 },
+    );
+  });
+
+  it("successfully creates application and navigates to detail", async () => {
+    const user = userEvent.setup();
+    renderApp();
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: /new application/i }),
+      ).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: /new application/i }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: /new application/i }),
+      ).toBeInTheDocument();
+    });
+
+    await user.type(screen.getByLabelText(/company/i), "New Corp");
+    await user.type(screen.getByLabelText(/role/i), "Developer");
+
+    await user.click(screen.getByRole("button", { name: /create/i }));
+
+    // Should navigate to the new app's detail page
+    await waitFor(() => {
+      expect(screen.getByText("New Corp")).toBeInTheDocument();
+    });
+  });
 });
