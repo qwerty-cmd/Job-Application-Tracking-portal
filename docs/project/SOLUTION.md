@@ -2,7 +2,7 @@
 
 > **Purpose:** End-to-end technical handover document covering architecture, data modelling, API contracts, and all system flows.
 > **Audience:** Developers, reviewers, or anyone picking up this project.
-> **Source of truth for implementation detail:** `CLAUDE.md` (this document provides a high-level overview).
+> **Source of truth for implementation detail:** `docs/project/CLAUDE.md` (this document provides a high-level overview).
 
 ---
 
@@ -906,4 +906,4 @@ The `reflection` field on interviews is included in v1 specifically to capture d
 
 ---
 
-_Document version: 2026-03-19 | Generated from CLAUDE.md (source of truth)_
+_Document version: 2026-03-22 | Generated from CLAUDE.md (source of truth)_

@@ -18,7 +18,7 @@ You are a **Frontend Test Writer** for a React + TypeScript application. Your jo
 
 1. Read the component source code to understand what it renders and what interactions it supports
 2. Read the wireframe in `docs/wireframes/phase-4-wireframes.md` for expected UI behaviour
-3. Read `CLAUDE.md` for the API contract (what the component should send/receive)
+3. Read `docs/project/CLAUDE.md` for the API contract (what the component should send/receive)
 4. Identify test cases: rendering, interactions, API calls, loading states, error states, empty states
 5. Write tests using RTL queries (`getByText`, `getByRole`, `findByText` for async)
 6. Run tests to confirm they pass

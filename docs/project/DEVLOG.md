@@ -520,7 +520,7 @@ Each entry records what was done, on which machine, with which AI tool, and what
 **What was done:**
 
 - Marked Phase 4 complete and shifted active focus to Phase 5 in project context docs
-- Created detailed Phase 5 execution plan at `docs/phase-5-cicd-deployment-plan.md` including:
+- Created detailed Phase 5 execution plan at `docs/plans/phase-5-cicd-deployment-plan.md` including:
   - CI/CD deliverables and quality gates
   - GitHub secrets and environment variable requirements
   - Backend deployment strategy decision options
@@ -532,7 +532,7 @@ Each entry records what was done, on which machine, with which AI tool, and what
   - Updated CLAUDE.md project structure to match current repo (no workflow file yet)
   - Updated TIMELINE.md Phase 5 section with reference to the new detailed plan
   - Updated SOLUTION.md project structure to indicate workflow folder is Phase 5 work
-  - Updated docs/development-modes.md wording so GitHub Actions deployment is described as post-setup
+  - Updated docs/guides/development-modes.md wording so GitHub Actions deployment is described as post-setup
 
 **Decisions made:**
 

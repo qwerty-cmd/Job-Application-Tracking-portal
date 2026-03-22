@@ -2,7 +2,7 @@
 // API Response Helpers
 // ============================================================================
 // Consistent { data, error } response shape for all endpoints.
-// See CLAUDE.md: "All Functions return consistent { data, error } response shape"
+// See docs/project/CLAUDE.md: "All Functions return consistent { data, error } response shape"
 
 import { HttpResponseInit } from "@azure/functions";
 import { ApiError } from "./types.js";

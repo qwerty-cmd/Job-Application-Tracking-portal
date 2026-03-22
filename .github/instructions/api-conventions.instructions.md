@@ -35,7 +35,7 @@ applyTo: "api/**/*.ts"
 
 - Validate at the API boundary (request input)
 - Return 400 with `VALIDATION_ERROR` code and `details` array listing each field error
-- Use enums from CLAUDE.md for status, rejection reason, interview type, outcome, workMode
+- Use enums from docs/project/CLAUDE.md for status, rejection reason, interview type, outcome, workMode
 
 ## Environment Variables
 

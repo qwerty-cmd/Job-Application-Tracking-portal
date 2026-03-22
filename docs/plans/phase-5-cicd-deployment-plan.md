@@ -15,6 +15,8 @@ In scope:
 - Production smoke testing and rollback checklist
 - Documentation updates for deployment operations
 
+Companion setup checklist: `docs/plans/cicd-secrets-checklist.md`
+
 Out of scope:
 
 - New product features (Phase 6)
