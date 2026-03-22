@@ -16,6 +16,7 @@ import {
   useAddInterview,
   useUpdateInterview,
   useDeleteInterview,
+  useReorderInterviews,
   useUploadFile,
   useDownloadFile,
   useDeleteFile,
@@ -38,6 +39,7 @@ export function ApplicationDetailPage() {
   const { isLoading: isUpdatingInterview, updateInterview } =
     useUpdateInterview();
   const { deleteInterview } = useDeleteInterview();
+  const { reorder } = useReorderInterviews();
   const {
     isLoading: isUploading,
     progress: uploadProgress,
@@ -172,6 +174,16 @@ export function ApplicationDetailPage() {
     }
   };
 
+  const handleReorderInterviews = async (orderedIds: string[]) => {
+    if (!application) return;
+    const res = await reorder(application.id, orderedIds);
+    if (res.data) {
+      refetch();
+    } else {
+      toast.error(formatApiError(res.error, "Failed to reorder interviews"));
+    }
+  };
+
   const handleInterviewSubmit = async (data: Record<string, unknown>) => {
     if (!application) return;
 
@@ -266,6 +278,7 @@ export function ApplicationDetailPage() {
         onAdd={handleAddInterview}
         onEdit={handleEditInterview}
         onDelete={handleDeleteInterview}
+        onReorder={handleReorderInterviews}
       />
 
       <InterviewModal
