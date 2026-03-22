@@ -62,7 +62,7 @@
 
 ---
 
-> **Note:** For the authoritative data model, API contract, and project structure, see `CLAUDE.md`. This file is for effort planning and timeline tracking only.
+> **Note:** For the authoritative data model, API contract, and project structure, see `docs/project/CLAUDE.md`. This file is for effort planning and timeline tracking only.
 
 ---
 
@@ -190,7 +190,7 @@ Function updates Cosmos DB record with blob URL, file name, timestamp
 
 **Effort: 3–4 hrs | Calendar: Week 3**
 
-Detailed execution plan: `docs/phase-5-cicd-deployment-plan.md`
+Detailed execution plan: `docs/plans/phase-5-cicd-deployment-plan.md`
 
 | Task                                   | Effort  | Notes                              |
 | -------------------------------------- | ------- | ---------------------------------- |

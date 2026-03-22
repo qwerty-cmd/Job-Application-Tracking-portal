@@ -1,7 +1,7 @@
 // ============================================================================
 // Domain Types — Job Application Tracking Portal
 // ============================================================================
-// Matches the Cosmos DB data model defined in CLAUDE.md.
+// Matches the Cosmos DB data model defined in docs/project/CLAUDE.md.
 
 export interface Location {
   city: string;

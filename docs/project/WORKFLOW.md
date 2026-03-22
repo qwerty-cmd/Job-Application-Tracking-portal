@@ -18,7 +18,7 @@ You have 3 custom agents in `.github/agents/`. Invoke them by typing `@agentname
 
 ### @test-writer — Red Phase (Write Failing Tests)
 
-**What it does:** Reads the endpoint spec from CLAUDE.md and writes a complete test file with all test cases. Confirms they all fail.
+**What it does:** Reads the endpoint spec from docs/project/CLAUDE.md and writes a complete test file with all test cases. Confirms they all fail.
 
 **When to use:** Before any implementation exists for an endpoint.
 
@@ -61,7 +61,7 @@ You have 3 custom agents in `.github/agents/`. Invoke them by typing `@agentname
 **Rules it follows:**
 
 - NEVER modifies test files — only writes source/production code
-- Follows CLAUDE.md conventions (`{ data, error }` response shape, singleton Cosmos client)
+- Follows docs/project/CLAUDE.md conventions (`{ data, error }` response shape, singleton Cosmos client)
 - Runs tests after each change
 - Stops when all tests pass — doesn't add untested features
 
@@ -90,7 +90,7 @@ You have 3 custom agents in `.github/agents/`. Invoke them by typing `@agentname
 
 - NEVER modifies any files — read-only analysis
 - Checks against OWASP Top 10
-- Verifies consistency with CLAUDE.md
+- Verifies consistency with docs/project/CLAUDE.md
 - Cites specific file paths and line numbers
 
 ---
@@ -111,7 +111,7 @@ Runs all three phases (red → green → review) for a single endpoint in one go
 
 **What happens:**
 
-1. Reads the endpoint contract from CLAUDE.md
+1. Reads the endpoint contract from docs/project/CLAUDE.md
 2. Writes all test cases (confirms they fail)
 3. Implements the function (iterates until tests pass)
 4. Reviews for security and consistency
@@ -147,7 +147,7 @@ These files in `.github/instructions/` auto-load based on what file you're editi
 No TDD agents needed — Bicep is infrastructure, not testable API code. Work directly in chat.
 
 ```
-Read CLAUDE.md for full project context. Create the Bicep infrastructure
+Read docs/project/CLAUDE.md for full project context. Create the Bicep infrastructure
 files: infra/main.bicep and infra/parameters.json with all required
 Azure resources.
 ```
@@ -179,7 +179,7 @@ az deployment group create -g job-tracker-rg -f infra/main.bicep -p infra/parame
 ```
 Scaffold the Azure Functions project in the api/ folder with TypeScript.
 Install dependencies and create the singleton Cosmos client at
-api/shared/cosmosClient.ts. Read CLAUDE.md for conventions.
+api/shared/cosmosClient.ts. Read docs/project/CLAUDE.md for conventions.
 ```
 
 **Step 2 — Build each endpoint with TDD:**
@@ -256,7 +256,7 @@ Key things processUpload tests should cover:
 No TDD agents — build directly in chat:
 
 ```
-Read CLAUDE.md for the full spec. Scaffold the React app in client/
+Read docs/project/CLAUDE.md for the full spec. Scaffold the React app in client/
 with Vite + TypeScript. Create the API service layer and the
 Dashboard page first.
 ```
@@ -266,7 +266,7 @@ Dashboard page first.
 ### Phase 5: CI/CD & Deployment
 
 ```
-Read CLAUDE.md. Set up the GitHub Actions workflow for Azure Static
+Read docs/project/CLAUDE.md. Set up the GitHub Actions workflow for Azure Static
 Web Apps deployment at .github/workflows/azure-static-web-apps.yml.
 ```
 
@@ -284,9 +284,9 @@ Run a full security review:
 
 ## Tips
 
-- **Each `@agent` call runs in its own context.** It reads your workspace files fresh. You don't need to paste specs — the agents read CLAUDE.md themselves.
+- **Each `@agent` call runs in its own context.** It reads your workspace files fresh. You don't need to paste specs — the agents read docs/project/CLAUDE.md themselves.
 - **Scoped instructions auto-load.** When @implementer creates `api/functions/createApplication/index.ts`, the api-conventions instructions are automatically available to it.
 - **One endpoint at a time.** Don't ask @test-writer to write tests for multiple endpoints in one request. Keep it focused.
 - **Review after each endpoint, not at the end.** Catching issues early is cheaper than fixing them across 15 endpoints.
 - **If an agent makes a mistake,** start a new chat and re-invoke it. Each agent call is stateless.
-- **CLAUDE.md is the source of truth.** All agents reference it. If you change a design decision, update CLAUDE.md first — the agents pick it up automatically.
+- **docs/project/CLAUDE.md is the source of truth.** All agents reference it. If you change a design decision, update docs/project/CLAUDE.md first — the agents pick it up automatically.

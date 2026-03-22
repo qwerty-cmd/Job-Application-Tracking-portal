@@ -14,6 +14,13 @@ CI/CD:     GitHub Actions (auto via Azure SWA)
 Auth:      Azure SWA built-in (GitHub provider)
 ```
 
+## Quick Links
+
+- CI/CD workflow: `.github/workflows/azure-static-web-apps.yml`
+- CI/CD secrets/setup: `docs/plans/cicd-secrets-checklist.md`
+- Phase 5 plan: `docs/plans/phase-5-cicd-deployment-plan.md`
+- Docs index: `docs/README.md`
+
 ## Current Status
 
 - [x] Phase 0: Architecture & Design — **complete**
@@ -931,7 +938,7 @@ job-tracker/
 - 2026-03-21: Phase 3 complete — deployed Function App to Azure (all 16 functions), enabled Event Grid subscription, E2E verified full upload pipeline (SAS token → blob PUT → Event Grid → processUpload → Cosmos update), verified re-upload (latest wins), download SAS, and file delete. Fixed: missing STORAGE_ACCOUNT_KEY env var (added to Bicep), processUpload `getProperties()` crash on Event Grid retry (added 404 try/catch), function registration glob issue (created `src/index.ts` single entry point). Dead-letter configured and verified (deadletter container, 30 retries, 24hr TTL).
 - 2026-03-22: Phase 4 frontend — fixed all remaining deferred defects from code review: H-4 (removed redundant status), H-6 (formatApiError helper for field-level validation errors in toasts), M-2 (login page text), M-3 (empty table state with CTA), M-7 (ARIA sort headers), M-8 (ARIA file indicators), L-1 (per-card isRestoring), L-4 (replaced all emojis with Lucide React icons across 8 files), T-12 (added missing MSW handlers for interview CRUD and file delete). 35 tests passing, 0 TypeScript errors.
 - 2026-03-22: Dashboard improvements — redesigned InterviewChart from flat "Interviews by Type" to "Interview Pipeline" with numbered stage progression (Phone Screen → Take Home Test → Technical → Behavioral → Case Study → Panel → Other), connector lines, and colored indicators. Fixed browser fetch caching (`cache: "no-store"` on all API calls). Added new DropoffChart component showing where applications ended/stalled ("No Response", "Pre-Interview", or by last interview stage). Updated backend getStats endpoint with `outcomesByStage` field. 35 frontend tests, 266 backend tests passing.
-- 2026-03-22: Phase 4 marked complete and Phase 5 kicked off. Added detailed CI/CD plan at `docs/phase-5-cicd-deployment-plan.md` and aligned deployment/status references across docs.
+- 2026-03-22: Phase 4 marked complete and Phase 5 kicked off. Added detailed CI/CD plan at `docs/plans/phase-5-cicd-deployment-plan.md` and aligned deployment/status references across docs.
 
 ---
 
@@ -941,20 +948,20 @@ job-tracker/
 
 1. `git pull` to get latest changes
 2. Read this file to see current status
-3. Read `DEVLOG.md` for recent session details if needed
-4. Tell your AI: _"Read CLAUDE.md for project context"_ (Claude Code does this automatically)
+3. Read `docs/project/DEVLOG.md` for recent session details if needed
+4. Tell your AI: _"Read docs/project/CLAUDE.md for project context"_ (Claude Code does this automatically)
 
 ### Ending a Session (on any machine)
 
 **Before you commit and push, update these three things:**
 
-1. **`CLAUDE.md` — Current Status section**
+1. **`docs/project/CLAUDE.md` — Current Status section**
    - Check off completed phases
    - Update "Currently working on" line
    - Add any new decisions to "Decisions Made"
    - Add a line to "Recent Work" with today's date and summary
 
-2. **`DEVLOG.md` — Append a new entry**
+2. **`docs/project/DEVLOG.md` — Append a new entry**
 
    ```markdown
    ## YYYY-MM-DD — [Machine] ([AI Tool])
@@ -966,7 +973,7 @@ job-tracker/
 
 3. **Commit and push**
    ```bash
-   git add CLAUDE.md DEVLOG.md
+   git add docs/project/CLAUDE.md docs/project/DEVLOG.md
    git commit -m "update project context — [brief summary]"
    git push
    ```
@@ -974,9 +981,9 @@ job-tracker/
 ### Quick Checklist (copy this into your commit message or just mentally run through it)
 
 ```
-[ ] Updated CLAUDE.md status checkboxes
+[ ] Updated docs/project/CLAUDE.md status checkboxes
 [ ] Updated "Currently working on" line
 [ ] Added to "Recent Work"
-[ ] Appended DEVLOG.md entry
+[ ] Appended docs/project/DEVLOG.md entry
 [ ] Committed and pushed
 ```

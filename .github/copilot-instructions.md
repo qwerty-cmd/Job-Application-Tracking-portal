@@ -4,7 +4,7 @@ applyTo: "**"
 
 # Job Application Tracking Portal — Copilot Context
 
-**Read `CLAUDE.md` in the repo root for full project context.**
+**Read `docs/project/CLAUDE.md` for full project context.**
 
 That file is the single source of truth and contains:
 
@@ -19,8 +19,8 @@ That file is the single source of truth and contains:
 
 Also available:
 
-- `DEVLOG.md` — detailed session-by-session work log
-- `TIMELINE.md` — project plan with phase breakdowns and effort estimates
+- `docs/project/DEVLOG.md` — detailed session-by-session work log
+- `docs/project/TIMELINE.md` — project plan with phase breakdowns and effort estimates
 
 ## Quick Reference
 
@@ -36,7 +36,7 @@ Also available:
 
 This project follows test-driven development. Use the custom agents:
 
-- **`@test-writer`** — Writes failing tests from CLAUDE.md specs (red phase)
+- **`@test-writer`** — Writes failing tests from docs/project/CLAUDE.md specs (red phase)
 - **`@implementer`** — Writes code to make tests pass (green phase)
 - **`@reviewer`** — Read-only security and consistency review
 

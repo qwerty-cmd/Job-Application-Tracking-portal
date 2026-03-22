@@ -2,7 +2,7 @@
 // Validation Helpers
 // ============================================================================
 // Shared validation logic for API request inputs.
-// See CLAUDE.md for full validation rules.
+// See docs/project/CLAUDE.md for full validation rules.
 
 import {
   APPLICATION_STATUSES,

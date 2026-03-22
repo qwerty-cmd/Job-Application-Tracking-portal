@@ -3,7 +3,7 @@
 // ============================================================================
 // Validates the x-ms-client-principal header from Azure Static Web Apps.
 // Returns 401 if missing/invalid, 403 if authenticated but missing 'owner' role.
-// See CLAUDE.md: "requireOwner() helper in api/shared/auth.ts"
+// See docs/project/CLAUDE.md: "requireOwner() helper in api/shared/auth.ts"
 
 import { HttpRequest, HttpResponseInit } from "@azure/functions";
 import { Logger } from "./logger.js";

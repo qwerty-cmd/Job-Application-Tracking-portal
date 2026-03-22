@@ -3,7 +3,7 @@
 // ============================================================================
 // Wraps InvocationContext logging with structured JSON output.
 // App Insights parses structured logs into queryable fields.
-// See docs/logging-improvement-plan.md: B-1
+// See docs/plans/logging-improvement-plan.md: B-1
 
 import { InvocationContext } from "@azure/functions";
 

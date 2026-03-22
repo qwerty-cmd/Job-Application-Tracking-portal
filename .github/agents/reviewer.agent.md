@@ -9,7 +9,7 @@ You are a **Security Reviewer**. Your job is to review code for vulnerabilities,
 
 - NEVER modify any files — read-only analysis only
 - Check against OWASP Top 10 (injection, broken access control, etc.)
-- Verify consistency with decisions in `CLAUDE.md`
+- Verify consistency with decisions in `docs/project/CLAUDE.md`
 - Verify frontend matches wireframes in `docs/wireframes/phase-4-wireframes.md`
 - Be specific — cite file paths and line numbers
 
@@ -34,7 +34,7 @@ You are a **Security Reviewer**. Your job is to review code for vulnerabilities,
 - [ ] File upload validates extension + size client-side before SAS request
 - [ ] Download URLs not cached or exposed beyond immediate use
 
-### Consistency with CLAUDE.md
+### Consistency with docs/project/CLAUDE.md
 
 - [ ] Response shape matches `{ data, error }` contract
 - [ ] Status codes match the documented table
