@@ -1,0 +1,12 @@
+{
+  "configurations": {
+    "app": {
+      "appLocation": "client",
+      "outputLocation": "dist",
+      "appDevserverUrl": "http://localhost:5173",
+      "apiDevserverUrl": "http://localhost:7071",
+      "run": "npm run dev",
+      "apiLocation": "api"
+    }
+  }
+}
