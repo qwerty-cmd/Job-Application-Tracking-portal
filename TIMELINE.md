@@ -190,6 +190,8 @@ Function updates Cosmos DB record with blob URL, file name, timestamp
 
 **Effort: 3–4 hrs | Calendar: Week 3**
 
+Detailed execution plan: `docs/phase-5-cicd-deployment-plan.md`
+
 | Task                                   | Effort  | Notes                              |
 | -------------------------------------- | ------- | ---------------------------------- |
 | Connect repo to Azure Static Web Apps  | 0.5 hrs | Azure Portal or CLI                |

@@ -196,7 +196,7 @@ swa deploy dist \
 
 **Option B — GitHub Actions (automated)**
 
-Push to the `main` branch. The GitHub Actions workflow (`.github/workflows/azure-static-web-apps.yml`) automatically builds and deploys the frontend to Azure Static Web Apps.
+After Phase 5 CI/CD setup is in place, push to the `main` branch. The GitHub Actions workflow (`.github/workflows/azure-static-web-apps.yml`) will automatically build and deploy the frontend to Azure Static Web Apps.
 
 ### Deploy the backend
 
