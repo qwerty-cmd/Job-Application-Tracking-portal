@@ -97,6 +97,9 @@ Auth:      Azure SWA built-in (GitHub provider)
 - Interview reflections field included in v1 (AI placeholder for v2)
 - API responses use consistent `{ data, error }` shape
 - PATCH for partial updates (not PUT)
+- Frontend component library: Shadcn/ui + Tailwind CSS (copy-paste components, Radix UI primitives, TanStack Table for data table, react-hook-form + zod for forms, @dnd-kit/core for drag-and-drop)
+- Frontend testing: Vitest + React Testing Library + MSW (Mock Service Worker) — same test runner as backend, RTL tests user behaviour not implementation, MSW intercepts fetch at network level
+- Applications list page: Excel-style table view (not cards) for quick overview — sortable columns, pagination, file status indicators
 
 ## Design Rationale
 
@@ -925,6 +928,7 @@ job-tracker/
 - 2026-03-21: Full Phase 2 code review — fixed critical mass assignment vulnerability in updateApplication (field whitelisting), added Content-Type header to auth error responses, handled invalid JSON body as 400 (not 500) across 6 endpoints, added STORAGE_ACCOUNT_KEY to local.settings.json, fixed processUpload stream API to use Node.js streams instead of Web API, documented SAS Content-Length constraint gap in CLAUDE.md, updated SOLUTION.md auth model to reflect Function-level enforcement. Removed unused deps (@azure/data-tables, uuid, @types/uuid). Added tests for mass assignment prevention, invalid JSON body handling, and rejection clearing edge case.
 - 2026-03-21: Phase 2 second review — fixed remaining Medium/Low issues: M-1 (force initial status "Applying"), M-2 (post-merge rejection invariant check), M-3 (safety comment on ORDER BY interpolation), M-4 (sanitize nested location/rejection objects). Extracted shared utilities: `stripBlobUrl()` to response.ts, `FILE_TYPE_TO_FIELD`/`FILE_TYPE_CONTAINERS`/`VALID_FILE_TYPES_SET` to types.ts, new `storageClient.ts` singleton (mirrors cosmosClient.ts pattern). Removed duplicated constants/helpers from 7+ endpoint files. Updated createApplication tests for forced status. Created `docs/reviews/phase-2-code-review.md` documenting all issues and fixes.
 - 2026-03-21: Phase 3 complete — deployed Function App to Azure (all 16 functions), enabled Event Grid subscription, E2E verified full upload pipeline (SAS token → blob PUT → Event Grid → processUpload → Cosmos update), verified re-upload (latest wins), download SAS, and file delete. Fixed: missing STORAGE_ACCOUNT_KEY env var (added to Bicep), processUpload `getProperties()` crash on Event Grid retry (added 404 try/catch), function registration glob issue (created `src/index.ts` single entry point). Dead-letter configured and verified (deadletter container, 30 retries, 24hr TTL).
+- 2026-03-22: Phase 4 frontend — fixed all remaining deferred defects from code review: H-4 (removed redundant status), H-6 (formatApiError helper for field-level validation errors in toasts), M-2 (login page text), M-3 (empty table state with CTA), M-7 (ARIA sort headers), M-8 (ARIA file indicators), L-1 (per-card isRestoring), L-4 (replaced all emojis with Lucide React icons across 8 files), T-12 (added missing MSW handlers for interview CRUD and file delete). 35 tests passing, 0 TypeScript errors.
 
 ---
 

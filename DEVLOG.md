@@ -432,3 +432,39 @@ Each entry records what was done, on which machine, with which AI tool, and what
 **Blockers:** None
 
 **Next session:** Phase 4 — Frontend (React + TypeScript with Vite).
+
+---
+
+## 2026-03-22 — Work Laptop (GitHub Copilot)
+
+**What was done:**
+
+- Fixed all remaining deferred defects from Phase 4 code review (9 items):
+  - **H-4:** Removed redundant `status: "Applying"` from CreateApplicationModal — backend enforces initial status
+  - **H-6:** Created `formatApiError()` helper in `lib/utils.ts` — surfaces field-level validation error details in toast messages across all 3 pages (ApplicationsPage, ApplicationDetailPage, DeletedApplicationsPage)
+  - **M-2:** Updated LoginPage text to "Track your job search journey in one place." + "Private app · Owner only" note
+  - **M-3:** Added empty state to ApplicationsTable with "No applications yet" message, description, and "+ New Application" CTA button (wired via `onCreateClick` prop)
+  - **M-7:** Added ARIA attributes to sortable table headers: `role="columnheader"`, `aria-sort` (ascending/descending/none), `tabIndex={0}`, keyboard handler (Enter/Space)
+  - **M-8:** Added `aria-label` to file indicator spans ("Resume uploaded" / "No resume", etc.)
+  - **L-1:** Changed `isRestoring` from shared boolean to per-card `restoringId` tracking in DeletedApplicationsPage
+  - **L-4:** Replaced ALL emojis/symbols with Lucide React icons across 8 files:
+    - `ApplicationsTable.tsx`: ✓/✗ → Check/X, ▲/▼ → ChevronUp/ChevronDown, ←/→ → ChevronLeft/ChevronRight
+    - `DetailHeader.tsx`: ← → ArrowLeft, 📍 → MapPin, 📅 → Calendar, 🗑 → Trash2
+    - `DetailFields.tsx`: 🔗 → ExternalLink
+    - `FileSection.tsx`: ⬇ → Download, 🔄 → RefreshCw, 🗑 → Trash2, 📤 → Upload
+    - `InterviewList.tsx`: 📅 → Calendar, 👤 → User
+    - `DeletedApplicationCard.tsx`: 📍 → MapPin, 📅 → Calendar, 🔄 → RotateCcw
+    - `DeletedApplicationsPage.tsx`: 🗑 → Trash2
+  - **T-12:** Added missing MSW handlers: PATCH/DELETE interview, reorder interviews, DELETE file
+- Updated `docs/reviews/phase-4-frontend-review.md` — all fixed items marked, summary table updated
+- Verified: 0 TypeScript errors, 35/35 tests passing (all 5 test files)
+
+**Remaining deferred items:**
+
+- M-1: Drag-and-drop interview reorder (feature work — polish phase)
+- L-3: LoginPage.test.tsx (test coverage — future)
+- T-1 through T-8: Additional test coverage gaps (future)
+
+**Blockers:** None
+
+**Next session:** Continue Phase 4 or begin Phase 5 — CI/CD & Deployment.
