@@ -5,7 +5,9 @@ import {
   InvocationContext,
 } from "@azure/functions";
 import { requireOwner } from "../../shared/auth.js";
+import { createLogger, serializeError } from "../../shared/logger.js";
 import { getContainer } from "../../shared/cosmosClient.js";
+import { trackEvent, trackMetric } from "../../shared/telemetry.js";
 import {
   successResponse,
   errorResponse,
@@ -53,14 +55,32 @@ function sanitizeRejection(rej: unknown): Rejection | null {
 
 async function updateApplication(
   req: HttpRequest,
-  _context: InvocationContext,
+  context: InvocationContext,
 ): Promise<HttpResponseInit> {
-  const authError = requireOwner(req);
+  const log = createLogger(context);
+  const startedAt = Date.now();
+  log.info("Request started", {
+    method: req.method,
+    url: req.url,
+    routeParams: req.params,
+    contentLength: req.headers.get("content-length"),
+  });
+  const authError = requireOwner(req, log);
   if (authError) return authError;
 
   try {
     const id = req.params.id;
-    const { resource } = await getContainer().item(id, id).read<Application>();
+    const readStart = Date.now();
+    const { resource, requestCharge: readRequestCharge } = await getContainer()
+      .item(id, id)
+      .read<Application>();
+    trackMetric("CosmosRequestCharge", readRequestCharge ?? 0);
+    log.info("Cosmos read", {
+      operation: "read",
+      partitionKey: id,
+      requestCharge: readRequestCharge,
+      durationMs: Date.now() - readStart,
+    });
 
     if (!resource || resource.isDeleted) {
       return notFoundError(`Application ${id} not found`);
@@ -134,7 +154,17 @@ async function updateApplication(
       ]);
     }
 
-    await getContainer().item(id, id).replace(merged);
+    const replaceStart = Date.now();
+    const { requestCharge: replaceRequestCharge } = await getContainer()
+      .item(id, id)
+      .replace(merged);
+    trackMetric("CosmosRequestCharge", replaceRequestCharge ?? 0);
+    log.info("Cosmos replace", {
+      operation: "replace",
+      partitionKey: id,
+      requestCharge: replaceRequestCharge,
+      durationMs: Date.now() - replaceStart,
+    });
 
     const response = {
       ...merged,
@@ -143,8 +173,24 @@ async function updateApplication(
       jobDescriptionFile: stripBlobUrl(merged.jobDescriptionFile),
     };
 
+    if (resource.status !== merged.status) {
+      trackEvent("ApplicationStatusChanged", {
+        applicationId: id,
+        oldStatus: resource.status,
+        newStatus: merged.status,
+      });
+    }
+    log.info("Request completed", {
+      status: 200,
+      durationMs: Date.now() - startedAt,
+      applicationId: id,
+    });
     return successResponse(response);
-  } catch {
+  } catch (err) {
+    log.error("Unhandled error", {
+      error: serializeError(err),
+      durationMs: Date.now() - startedAt,
+    });
     return serverError();
   }
 }

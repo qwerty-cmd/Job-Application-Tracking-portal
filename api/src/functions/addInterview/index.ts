@@ -6,7 +6,9 @@ import {
 } from "@azure/functions";
 import { randomUUID } from "crypto";
 import { requireOwner } from "../../shared/auth.js";
+import { createLogger, serializeError } from "../../shared/logger.js";
 import { getContainer } from "../../shared/cosmosClient.js";
+import { trackEvent, trackMetric } from "../../shared/telemetry.js";
 import {
   successResponse,
   errorResponse,
@@ -20,10 +22,18 @@ import { validateCreateInterview } from "../../shared/validation.js";
 
 async function addInterview(
   req: HttpRequest,
-  _context: InvocationContext,
+  context: InvocationContext,
 ): Promise<HttpResponseInit> {
+  const log = createLogger(context);
+  const startedAt = Date.now();
+  log.info("Request started", {
+    method: req.method,
+    url: req.url,
+    routeParams: req.params,
+    contentLength: req.headers.get("content-length"),
+  });
   // 1. Auth check
-  const authError = requireOwner(req);
+  const authError = requireOwner(req, log);
   if (authError) return authError;
 
   try {
@@ -47,7 +57,17 @@ async function addInterview(
 
     // 4. Point read application
     const container = getContainer();
-    const { resource } = await container.item(id, id).read<Application>();
+    const readStart = Date.now();
+    const { resource, requestCharge: readRequestCharge } = await container
+      .item(id, id)
+      .read<Application>();
+    trackMetric("CosmosRequestCharge", readRequestCharge ?? 0);
+    log.info("Cosmos read", {
+      operation: "read",
+      partitionKey: id,
+      requestCharge: readRequestCharge,
+      durationMs: Date.now() - readStart,
+    });
 
     if (!resource || resource.isDeleted) {
       return notFoundError(`Application ${id} not found`);
@@ -84,7 +104,16 @@ async function addInterview(
       updatedAt: now,
     };
 
-    const { resource: saved } = await container.item(id, id).replace(updated);
+    const replaceStart = Date.now();
+    const { resource: saved, requestCharge: replaceRequestCharge } =
+      await container.item(id, id).replace(updated);
+    trackMetric("CosmosRequestCharge", replaceRequestCharge ?? 0);
+    log.info("Cosmos replace", {
+      operation: "replace",
+      partitionKey: id,
+      requestCharge: replaceRequestCharge,
+      durationMs: Date.now() - replaceStart,
+    });
 
     // 8. Strip blobUrl and return
     const application = {
@@ -94,8 +123,22 @@ async function addInterview(
       jobDescriptionFile: stripBlobUrl(saved!.jobDescriptionFile),
     };
 
+    trackEvent("InterviewAdded", {
+      applicationId: id,
+      type: newInterview.type,
+      outcome: newInterview.outcome,
+    });
+    log.info("Request completed", {
+      status: 201,
+      durationMs: Date.now() - startedAt,
+      applicationId: id,
+    });
     return successResponse(application, 201);
-  } catch {
+  } catch (err) {
+    log.error("Unhandled error", {
+      error: serializeError(err),
+      durationMs: Date.now() - startedAt,
+    });
     return serverError();
   }
 }

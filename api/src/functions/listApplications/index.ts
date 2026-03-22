@@ -5,6 +5,8 @@ import {
   InvocationContext,
 } from "@azure/functions";
 import { requireOwner } from "../../shared/auth.js";
+import { createLogger, serializeError } from "../../shared/logger.js";
+import { trackMetric } from "../../shared/telemetry.js";
 import { getContainer } from "../../shared/cosmosClient.js";
 import { successResponse, serverError } from "../../shared/response.js";
 import { Application, ApplicationSummary } from "../../shared/types.js";
@@ -31,10 +33,18 @@ function toSummary(app: Application): ApplicationSummary {
 
 async function listApplications(
   req: HttpRequest,
-  _context: InvocationContext,
+  context: InvocationContext,
 ): Promise<HttpResponseInit> {
+  const log = createLogger(context);
+  const startedAt = Date.now();
+  log.info("Request started", {
+    method: req.method,
+    url: req.url,
+    routeParams: req.params,
+    contentLength: req.headers.get("content-length"),
+  });
   // 1. Auth check
-  const authError = requireOwner(req);
+  const authError = requireOwner(req, log);
   if (authError) return authError;
 
   try {
@@ -79,9 +89,15 @@ async function listApplications(
     const query = `SELECT * FROM c WHERE ${whereClause} ORDER BY c.${sortBy} ${sortOrder.toUpperCase()}`;
 
     // 4. Execute query
-    const { resources } = await getContainer()
+    const { resources, requestCharge } = await getContainer()
       .items.query<Application>({ query, parameters })
       .fetchAll();
+    trackMetric("CosmosRequestCharge", requestCharge ?? 0);
+    log.info("Cosmos query", {
+      operation: "query",
+      requestCharge,
+      resultCount: resources.length,
+    });
 
     // 5. In-memory pagination
     const totalItems = resources.length;
@@ -97,7 +113,11 @@ async function listApplications(
       items,
       pagination: { page, pageSize, totalItems, totalPages },
     });
-  } catch {
+  } catch (err) {
+    log.error("Unhandled error", {
+      error: serializeError(err),
+      durationMs: Date.now() - startedAt,
+    });
     return serverError();
   }
 }

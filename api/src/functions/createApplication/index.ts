@@ -5,7 +5,9 @@ import {
   InvocationContext,
 } from "@azure/functions";
 import { requireOwner } from "../../shared/auth.js";
+import { createLogger, serializeError } from "../../shared/logger.js";
 import { getContainer } from "../../shared/cosmosClient.js";
+import { trackEvent, trackMetric } from "../../shared/telemetry.js";
 import { validateCreateApplication } from "../../shared/validation.js";
 import {
   successResponse,
@@ -51,10 +53,18 @@ function sanitizeRejection(rej: unknown): Rejection | null {
 
 async function createApplication(
   req: HttpRequest,
-  _context: InvocationContext,
+  context: InvocationContext,
 ): Promise<HttpResponseInit> {
+  const log = createLogger(context);
+  const startedAt = Date.now();
+  log.info("Request started", {
+    method: req.method,
+    url: req.url,
+    routeParams: req.params,
+    contentLength: req.headers.get("content-length"),
+  });
   // 1. Auth check
-  const authError = requireOwner(req);
+  const authError = requireOwner(req, log);
   if (authError) return authError;
 
   try {
@@ -98,11 +108,35 @@ async function createApplication(
     };
 
     // 5. Create in Cosmos
-    await getContainer().items.create(doc);
+    const cosmosStart = Date.now();
+    const { requestCharge } = await getContainer().items.create(doc);
+    const cosmosDurationMs = Date.now() - cosmosStart;
+    trackMetric("CosmosRequestCharge", requestCharge ?? 0);
+    log.info("Cosmos create", {
+      operation: "create",
+      partitionKey: doc.id,
+      requestCharge,
+      durationMs: cosmosDurationMs,
+    });
+    trackEvent("ApplicationCreated", {
+      applicationId: doc.id,
+      company: doc.company,
+      role: doc.role,
+      hasLocation: !!doc.location,
+    });
 
     // 6. Return 201
+    log.info("Request completed", {
+      status: 201,
+      durationMs: Date.now() - startedAt,
+      applicationId: doc.id,
+    });
     return successResponse(doc, 201);
-  } catch {
+  } catch (err) {
+    log.error("Unhandled error", {
+      error: serializeError(err),
+      durationMs: Date.now() - startedAt,
+    });
     return serverError();
   }
 }
