@@ -28,6 +28,17 @@ const fixedStats = {
     "Take Home Test": 0,
     Other: 0,
   },
+  outcomesByStage: {
+    "No Response": 2,
+    "Pre-Interview": 0,
+    "Phone Screen": 1,
+    "Take Home Test": 0,
+    Technical: 0,
+    Behavioral: 0,
+    "Case Study": 0,
+    Panel: 0,
+    Other: 0,
+  },
 };
 
 function useFixedStats() {
@@ -81,7 +92,10 @@ describe("DashboardPage", () => {
     });
 
     // Mock stats: totalApplications = 5
-    expect(screen.getByText("5")).toBeInTheDocument();
+    const totalAppsCard = screen
+      .getByText("Total Apps")
+      .closest("[class*='card']")!;
+    expect(totalAppsCard).toHaveTextContent("5");
     expect(screen.getByText("Active")).toBeInTheDocument();
     // "Rejected" and "Accepted" appear in both summary cards and status chart.
     // Use getAllByText to verify at least one occurrence.
@@ -102,18 +116,19 @@ describe("DashboardPage", () => {
     expect(screen.getByText("Interview Stage")).toBeInTheDocument();
   });
 
-  it("displays Interviews by Type chart", async () => {
+  it("displays Interview Pipeline chart", async () => {
     useFixedStats();
     renderDashboard();
 
     await waitFor(() => {
-      expect(screen.getByText("Interviews by Type")).toBeInTheDocument();
+      expect(screen.getByText("Interview Pipeline")).toBeInTheDocument();
     });
 
     // Mock stats: totalInterviews = 2
-    expect(screen.getByText(/total interviews: 2/i)).toBeInTheDocument();
-    expect(screen.getByText("Phone Screen")).toBeInTheDocument();
-    expect(screen.getByText("Technical")).toBeInTheDocument();
+    expect(screen.getByText(/2 interviews conducted/i)).toBeInTheDocument();
+    // Phone Screen appears in both Interview Pipeline and Dropoff chart
+    expect(screen.getAllByText("Phone Screen").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Technical").length).toBeGreaterThanOrEqual(1);
   });
 
   it("displays Quick Insights section", async () => {

@@ -89,6 +89,7 @@ export interface StatsResponse {
   byStatus: Record<ApplicationStatus, number>;
   totalInterviews: number;
   interviewsByType: Record<InterviewType, number>;
+  outcomesByStage: Record<string, number>;
 }
 
 // --- Enums ---
