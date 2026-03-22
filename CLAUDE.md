@@ -18,7 +18,7 @@ Auth:      Azure SWA built-in (GitHub provider)
 
 - [x] Phase 0: Architecture & Design — **complete**
 - [x] Phase 1: Infrastructure (Bicep) — **complete (deployed to Azure, all 16 resources live)**
-- [x] Phase 2: Backend API (CRUD Functions) — **complete (all 16 endpoints + processUpload trigger, 261 tests)**
+- [x] Phase 2: Backend API (CRUD Functions) — **complete (all 16 endpoints + processUpload trigger, 266 tests)**
 - [x] Phase 3: Event Streaming Pipeline — **complete (deployed, E2E verified, dead-letter configured)**
 - [ ] Phase 4: Frontend (React)
 - [ ] Phase 5: CI/CD & Deployment
@@ -929,6 +929,7 @@ job-tracker/
 - 2026-03-21: Phase 2 second review — fixed remaining Medium/Low issues: M-1 (force initial status "Applying"), M-2 (post-merge rejection invariant check), M-3 (safety comment on ORDER BY interpolation), M-4 (sanitize nested location/rejection objects). Extracted shared utilities: `stripBlobUrl()` to response.ts, `FILE_TYPE_TO_FIELD`/`FILE_TYPE_CONTAINERS`/`VALID_FILE_TYPES_SET` to types.ts, new `storageClient.ts` singleton (mirrors cosmosClient.ts pattern). Removed duplicated constants/helpers from 7+ endpoint files. Updated createApplication tests for forced status. Created `docs/reviews/phase-2-code-review.md` documenting all issues and fixes.
 - 2026-03-21: Phase 3 complete — deployed Function App to Azure (all 16 functions), enabled Event Grid subscription, E2E verified full upload pipeline (SAS token → blob PUT → Event Grid → processUpload → Cosmos update), verified re-upload (latest wins), download SAS, and file delete. Fixed: missing STORAGE_ACCOUNT_KEY env var (added to Bicep), processUpload `getProperties()` crash on Event Grid retry (added 404 try/catch), function registration glob issue (created `src/index.ts` single entry point). Dead-letter configured and verified (deadletter container, 30 retries, 24hr TTL).
 - 2026-03-22: Phase 4 frontend — fixed all remaining deferred defects from code review: H-4 (removed redundant status), H-6 (formatApiError helper for field-level validation errors in toasts), M-2 (login page text), M-3 (empty table state with CTA), M-7 (ARIA sort headers), M-8 (ARIA file indicators), L-1 (per-card isRestoring), L-4 (replaced all emojis with Lucide React icons across 8 files), T-12 (added missing MSW handlers for interview CRUD and file delete). 35 tests passing, 0 TypeScript errors.
+- 2026-03-22: Dashboard improvements — redesigned InterviewChart from flat "Interviews by Type" to "Interview Pipeline" with numbered stage progression (Phone Screen → Take Home Test → Technical → Behavioral → Case Study → Panel → Other), connector lines, and colored indicators. Fixed browser fetch caching (`cache: "no-store"` on all API calls). Added new DropoffChart component showing where applications ended/stalled ("No Response", "Pre-Interview", or by last interview stage). Updated backend getStats endpoint with `outcomesByStage` field. 35 frontend tests, 266 backend tests passing.
 
 ---
 
