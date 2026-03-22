@@ -468,3 +468,47 @@ Each entry records what was done, on which machine, with which AI tool, and what
 **Blockers:** None
 
 **Next session:** Continue Phase 4 or begin Phase 5 — CI/CD & Deployment.
+
+---
+
+## 2026-03-22 — Work Laptop (GitHub Copilot) — Session 2
+
+**What was done:**
+
+- Redesigned InterviewChart component from flat "Interviews by Type" bar chart to "Interview Pipeline" visualization:
+  - Logical stage ordering: Phone Screen → Take Home Test → Technical → Behavioral → Case Study → Panel → Other
+  - Numbered step indicator circles (colored when count > 0, muted when 0)
+  - Vertical connector lines between stages
+  - Updated title to "Interview Pipeline" with "{n} interview(s) conducted" description
+- Fixed browser fetch caching issue — stats and other API data wasn't refreshing after mutations:
+  - Added `cache: "no-store"` to `RequestInit` options in `client/src/lib/api.ts`
+- Created new DropoffChart component (`client/src/components/DropoffChart.tsx`):
+  - Shows where applications ended or stalled ("No Response", "Pre-Interview", or by last interview stage)
+  - Only renders non-zero stages, with empty state message when total is 0
+  - Horizontal bar chart with color coding
+- Updated backend `getStats` endpoint with `outcomesByStage` field:
+  - Rejected/Withdrawn apps with interviews → counted by last interview type
+  - Rejected with no interviews → "Pre-Interview"
+  - Applying/Application Submitted → "No Response"
+  - Active apps and soft-deleted apps excluded
+- Updated MSW stats handler to compute `outcomesByStage` from in-memory store
+- Added `outcomesByStage: Record<string, number>` to `StatsResponse` type
+- Added 5 new backend tests for outcomesByStage (266 total backend tests)
+- Fixed test collisions between InterviewChart and DropoffChart (both rendering "Phone Screen")
+- All tests passing: 35 frontend, 266 backend
+
+**Files changed:**
+
+- `client/src/components/InterviewChart.tsx` — rewritten as pipeline
+- `client/src/components/DropoffChart.tsx` — new component
+- `client/src/lib/api.ts` — added `cache: "no-store"`
+- `client/src/types/index.ts` — added `outcomesByStage` to StatsResponse
+- `client/src/mocks/handlers.ts` — updated stats handler with outcomesByStage
+- `client/src/pages/DashboardPage.tsx` — added DropoffChart rendering
+- `client/src/pages/DashboardPage.test.tsx` — updated fixedStats, fixed assertions
+- `api/src/functions/getStats/index.ts` — added outcomesByStage computation
+- `api/src/functions/getStats/getStats.test.ts` — added 5 new tests
+
+**Blockers:** None
+
+**Next session:** Continue Phase 4 polish or begin Phase 5 — CI/CD & Deployment.
