@@ -1,0 +1,93 @@
+name: Azure Functions CI/CD
+
+on:
+    push:
+        branches:
+            - main
+        paths:
+            - "api/**"
+            - ".github/workflows/azure-functions.yml"
+    pull_request:
+        branches:
+            - main
+        paths:
+            - "api/**"
+            - ".github/workflows/azure-functions.yml"
+    workflow_dispatch:
+
+concurrency:
+    group: functions-${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+
+permissions:
+    contents: read
+
+env:
+    NODE_VERSION: "20.x"
+    FUNCTION_APP_NAME: func-jobtracker
+
+jobs:
+    quality-gates:
+        name: Quality Gates (API)
+        runs-on: ubuntu-latest
+        defaults:
+            run:
+                working-directory: api
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+                  cache: npm
+                  cache-dependency-path: api/package-lock.json
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Run tests
+              run: npm run test
+
+            - name: Build
+              run: npm run build
+
+            - name: Prune dev dependencies
+              run: npm prune --production
+
+            - name: Upload API artifact
+              uses: actions/upload-artifact@v4
+              with:
+                  name: api-build
+                  path: |
+                      api/dist
+                      api/host.json
+                      api/package.json
+                      api/package-lock.json
+                  if-no-files-found: error
+
+    deploy:
+        name: Deploy to Azure Functions
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        runs-on: ubuntu-latest
+        needs: quality-gates
+
+        steps:
+            - name: Download API artifact
+              uses: actions/download-artifact@v4
+              with:
+                  name: api-build
+                  path: api-artifact
+
+            - name: Install production dependencies
+              working-directory: api-artifact
+              run: npm ci --omit=dev
+
+            - name: Deploy to Azure Functions
+              uses: Azure/functions-action@v1
+              with:
+                  app-name: ${{ env.FUNCTION_APP_NAME }}
+                  package: api-artifact
+                  publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
