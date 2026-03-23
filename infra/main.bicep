@@ -259,14 +259,9 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
           name: 'AzureWebJobsStorage'
           value: 'DefaultEndpointsProtocol=https;AccountName=${storageAccount.name};EndpointSuffix=${environment().suffixes.storage};AccountKey=${storageAccount.listKeys().keys[0].value}'
         }
-        {
-          name: 'WEBSITE_CONTENTAZUREFILECONNECTIONSTRING'
-          value: 'DefaultEndpointsProtocol=https;AccountName=${storageAccount.name};EndpointSuffix=${environment().suffixes.storage};AccountKey=${storageAccount.listKeys().keys[0].value}'
-        }
-        {
-          name: 'WEBSITE_CONTENTSHARE'
-          value: functionAppName
-        }
+        // Note: WEBSITE_CONTENTAZUREFILECONNECTIONSTRING and WEBSITE_CONTENTSHARE are
+        // Windows Consumption plan settings only. Setting them on Linux causes Azure to
+        // auto-inject WEBSITE_RUN_FROM_PACKAGE as a blob URL, which breaks ZipDeploy.
         {
           name: 'FUNCTIONS_EXTENSION_VERSION'
           value: '~4'
