@@ -55,7 +55,9 @@ async function request<T>(
   const startedAt = performance.now();
   try {
     const principalHeader = await getPrincipalHeader();
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
     if (principalHeader) {
       headers["x-ms-client-principal"] = principalHeader;
     }
