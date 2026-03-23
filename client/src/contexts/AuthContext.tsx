@@ -7,6 +7,7 @@ import {
 } from "react";
 import type { ClientPrincipal, AuthMeResponse } from "@/types";
 import { logger } from "@/lib/logger";
+import { invalidatePrincipalCache } from "@/lib/api";
 
 interface AuthContextValue {
   user: ClientPrincipal | null;
@@ -36,6 +37,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         const data: AuthMeResponse = await res.json();
         if (!cancelled) {
+          invalidatePrincipalCache();
           setUser(data.clientPrincipal);
           if (data.clientPrincipal) {
             logger.info("Auth session restored", {
@@ -74,10 +76,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isOwner = user?.userRoles.includes("owner") ?? false;
 
   function login() {
+    invalidatePrincipalCache();
     window.location.href = "/.auth/login/github?post_login_redirect_uri=/";
   }
 
   function logout() {
+    invalidatePrincipalCache();
     window.location.href = "/.auth/logout?post_logout_redirect_uri=/login";
   }
 
