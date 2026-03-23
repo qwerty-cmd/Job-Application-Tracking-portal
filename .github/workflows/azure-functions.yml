@@ -81,6 +81,36 @@ jobs:
                   name: api-build
                   path: api-artifact
 
+          - name: Validate WEBSITE_RUN_FROM_PACKAGE for ZipDeploy
+            shell: pwsh
+            env:
+              PUBLISH_PROFILE: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
+            run: |
+              $profileXml = [xml]$env:PUBLISH_PROFILE
+              $profile = $profileXml.publishData.publishProfile | Where-Object { $_.publishMethod -eq 'MSDeploy' } | Select-Object -First 1
+
+              if (-not $profile) {
+                throw "Could not parse MSDeploy profile from AZURE_FUNCTIONAPP_PUBLISH_PROFILE secret."
+              }
+
+              $scmHost = $profile.publishUrl.Split(':')[0]
+              $scmUrl = "https://$scmHost"
+              $userName = $profile.userName
+              $userPassword = $profile.userPWD
+
+              $tokenBytes = [System.Text.Encoding]::ASCII.GetBytes("${userName}:${userPassword}")
+              $token = [System.Convert]::ToBase64String($tokenBytes)
+              $headers = @{ Authorization = "Basic $token" }
+
+              $settings = Invoke-RestMethod -Uri "$scmUrl/api/settings" -Headers $headers -Method Get
+              $runFromPackage = $settings.WEBSITE_RUN_FROM_PACKAGE
+
+              if ($runFromPackage -and $runFromPackage -match '^https?://') {
+                throw "WEBSITE_RUN_FROM_PACKAGE is set to URL '$runFromPackage'. ZipDeploy will fail. Remove this app setting from the Function App and rerun the workflow."
+              }
+
+              Write-Host "WEBSITE_RUN_FROM_PACKAGE setting is compatible with ZipDeploy."
+
             - name: Install production dependencies
               working-directory: api-artifact
               run: npm ci --omit=dev
