@@ -253,6 +253,12 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
       linuxFxVersion: 'Node|20'
       ftpsState: 'Disabled'
       minTlsVersion: '1.2'
+      cors: {
+        allowedOrigins: [
+          'https://gray-rock-0c358e300.1.azurestaticapps.net'
+        ]
+        supportCredentials: true
+      }
       appSettings: [
         // Functions runtime
         {
