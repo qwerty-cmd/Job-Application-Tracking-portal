@@ -56,7 +56,7 @@ jobs:
 
     deploy:
         name: Deploy to Azure Static Web Apps
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         runs-on: ubuntu-latest
         needs: quality-gates
 
