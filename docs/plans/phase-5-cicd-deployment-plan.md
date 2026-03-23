@@ -28,7 +28,7 @@ Out of scope:
 - Infrastructure is already deployed (SWA + Function App + Cosmos DB + Blob + Event Grid).
 - Frontend is complete for Phase 4.
 - API endpoints and event pipeline are complete and tested.
-- No .github/workflows pipeline file exists yet in this repository.
+- Frontend and backend CI/CD workflows exist in `.github/workflows/azure-static-web-apps.yml` and `.github/workflows/azure-functions.yml`.
 - SWA Free tier is in use, so API auth is enforced in Azure Functions using x-ms-client-principal and owner role checks.
 
 ## Phase 5 Deliverables
@@ -81,29 +81,19 @@ Before deployment job runs on main:
 
 Fail fast if tests or build fail.
 
-## Workstream B - Backend Deployment Strategy (Required Decision)
+## Workstream B - Backend Deployment Strategy (Implemented)
 
-Choose one of these approaches and document it in workflow docs:
+Backend deployment is automated using `.github/workflows/azure-functions.yml`.
 
-### Option 1 (Recommended now): Manual backend deployment
+- Trigger: push to `main` (scoped to API path changes) and manual `workflow_dispatch`
+- Deployment guardrail: deploy job only runs from `refs/heads/main`
+- Quality gates: `npm ci`, `npm run test`, `npm run build`
+- Artifact deployment: deploys packaged API artifact via `Azure/functions-action@v1`
+- Secret required: `AZURE_FUNCTIONAPP_PUBLISH_PROFILE`
 
-- Keep backend deployment manual using:
-  - cd api
-  - npm run build
-  - func azure functionapp publish func-jobtracker
-- Use this while frontend CI/CD stabilizes
-- Lower risk and fewer moving parts for initial Phase 5 completion
+Operational note:
 
-### Option 2 (Phase 5 extension): Automate backend deployment in GitHub Actions
-
-- Add separate workflow for api deployment
-- Use Azure login via OIDC or service principal
-- Publish on push to main after tests pass
-
-Decision rule:
-
-- If frontend pipeline is stable and secrets are fully configured, Option 2 can be added in the same phase.
-- Otherwise complete Phase 5 with Option 1 and schedule backend automation at Phase 6 start.
+- The workflow includes a pre-deploy validation for `WEBSITE_RUN_FROM_PACKAGE` compatibility before ZipDeploy.
 
 ## Workstream C - Production Configuration Checks
 
@@ -196,12 +186,11 @@ If backend issue impacts production:
 
 ## Execution Order
 
-1. Create and merge frontend workflow
-2. Configure repository secrets
-3. Run first deployment on main
-4. Execute smoke test checklist and fix issues
-5. Finalize backend deployment strategy decision
-6. Update CLAUDE, DEVLOG, and TIMELINE status
+1. Configure repository secrets
+2. Run first deployments on main (frontend + backend)
+3. Execute smoke test checklist and fix issues
+4. Run rollback drill and capture notes
+5. Update CLAUDE, DEVLOG, and TIMELINE status
 
 ## Definition of Done for Phase 5
 
@@ -235,11 +224,11 @@ Risk: Pipeline flakiness from npm install variability
 
 Use this checklist during execution:
 
-- [ ] Workflow file created and committed
+- [x] Workflow file created and committed
 - [ ] GitHub secrets added
 - [ ] First main deployment successful
 - [ ] Smoke test checklist passed
-- [ ] Backend strategy decision recorded
+- [x] Backend strategy decision recorded
 - [ ] CLAUDE status updated
 - [ ] TIMELINE status updated
 - [ ] DEVLOG deployment summary added

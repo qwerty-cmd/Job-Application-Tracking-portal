@@ -10,13 +10,15 @@ Storage:   Azure Blob Storage (resumes, cover letters, job descriptions)
 Events:    Azure Event Grid (blob upload → function trigger)
 Hosting:   Azure Static Web Apps (free tier)
 IaC:       Bicep
-CI/CD:     GitHub Actions (auto via Azure SWA)
+CI/CD:     GitHub Actions (SWA + Functions workflows)
 Auth:      Azure SWA built-in (GitHub provider)
 ```
 
 ## Quick Links
 
-- CI/CD workflow: `.github/workflows/azure-static-web-apps.yml`
+- CI/CD workflows:
+  - `.github/workflows/azure-static-web-apps.yml`
+  - `.github/workflows/azure-functions.yml`
 - CI/CD secrets/setup: `docs/plans/cicd-secrets-checklist.md`
 - Phase 5 plan: `docs/plans/phase-5-cicd-deployment-plan.md`
 - Docs index: `docs/README.md`
