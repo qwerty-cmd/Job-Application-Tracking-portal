@@ -3,6 +3,29 @@ import { logger } from "@/lib/logger";
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? "";
 
+// When VITE_API_URL points to an external standalone Function App, SWA does not
+// automatically inject x-ms-client-principal. We read it from /.auth/me and
+// forward it manually so the Function App auth layer can validate the session.
+let _cachedPrincipalHeader: string | null | undefined = undefined;
+
+async function getPrincipalHeader(): Promise<string | null> {
+  if (_cachedPrincipalHeader !== undefined) return _cachedPrincipalHeader;
+  try {
+    const res = await fetch("/.auth/me", { credentials: "include" });
+    const data = await res.json();
+    const principal = data?.clientPrincipal ?? null;
+    _cachedPrincipalHeader = principal ? btoa(JSON.stringify(principal)) : null;
+  } catch {
+    _cachedPrincipalHeader = null;
+  }
+  return _cachedPrincipalHeader;
+}
+
+// Exported so AuthContext can invalidate the cache on login/logout.
+export function invalidatePrincipalCache(): void {
+  _cachedPrincipalHeader = undefined;
+}
+
 function buildUrl(path: string, params?: Record<string, string>): string {
   const url = `${BASE_URL}${path}`;
   if (!params) return url;
@@ -31,11 +54,17 @@ async function request<T>(
 ): Promise<ApiResponse<T>> {
   const startedAt = performance.now();
   try {
+    const principalHeader = await getPrincipalHeader();
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (principalHeader) {
+      headers["x-ms-client-principal"] = principalHeader;
+    }
+
     const options: RequestInit = {
       method,
       credentials: "include",
       cache: "no-store",
-      headers: { "Content-Type": "application/json" },
+      headers,
     };
 
     if (body !== undefined) {
