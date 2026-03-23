@@ -541,3 +541,52 @@ Each entry records what was done, on which machine, with which AI tool, and what
 **Blockers:** None
 
 **Next session:** Implement `.github/workflows/azure-static-web-apps.yml`, configure repo secrets, run first deployment, and execute the production smoke-test checklist.
+
+---
+
+## 2026-03-23 — Work Laptop (GitHub Copilot) — Session 4
+
+**What was done:**
+
+- Implemented frontend CI/CD workflow at `.github/workflows/azure-static-web-apps.yml`:
+  - `push` and `pull_request` triggers on `main`
+  - `workflow_dispatch` enabled
+  - Quality gates (`npm ci`, test, build)
+  - Deploy job using prebuilt `dist` artifact
+- Implemented backend CI/CD workflow at `.github/workflows/azure-functions.yml`:
+  - `push` and `pull_request` triggers on `main` scoped to `api/**`
+  - `workflow_dispatch` enabled
+  - Quality gates (`npm ci`, test, build)
+  - Artifact-based deployment via `Azure/functions-action@v1`
+  - Pre-deploy guard for `WEBSITE_RUN_FROM_PACKAGE` ZipDeploy compatibility
+
+**Decisions made:**
+
+- Standardized both workflows to support manual runs while preventing non-main deployment.
+- Backend deployment strategy moved from manual CLI publish to GitHub Actions workflow.
+
+**Blockers:** None
+
+**Next session:** Validate secrets, run first production deployment from `main`, and execute Phase 5 smoke tests.
+
+---
+
+## 2026-03-23 — Work Laptop (GitHub Copilot) — Session 5
+
+**What was done:**
+
+- Updated deploy conditions in both workflows so deploy jobs run for:
+  - `push` on `main`
+  - `workflow_dispatch` when ref is `main`
+- Synchronized Phase 5 docs with implemented state:
+  - Updated baseline/strategy/tracking in `docs/plans/phase-5-cicd-deployment-plan.md`
+  - Updated secrets checklist in `docs/plans/cicd-secrets-checklist.md`
+  - Updated CI/CD quick links and architecture line in `docs/project/CLAUDE.md`
+
+**Decisions made:**
+
+- Keep deploy gate as `main` only for both static web app and function app workflows.
+
+**Blockers:** None
+
+**Next session:** Record deployment evidence (run IDs + smoke test outcomes) and close remaining Phase 5 checklist items.
