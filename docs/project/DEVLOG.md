@@ -590,3 +590,31 @@ Each entry records what was done, on which machine, with which AI tool, and what
 **Blockers:** None
 
 **Next session:** Record deployment evidence (run IDs + smoke test outcomes) and close remaining Phase 5 checklist items.
+
+---
+
+## 2026-03-24 — Home (Claude Code)
+
+**What was done:**
+
+- Configured all 4 GitHub Actions secrets: `AZURE_STATIC_WEB_APPS_API_TOKEN`, `VITE_API_URL`, `VITE_APPINSIGHTS_CONNECTION_STRING`, `AZURE_FUNCTIONAPP_PUBLISH_PROFILE`
+- Triggered first production deployments via `workflow_dispatch` for both SWA and Functions workflows — both passed quality gates and deployed successfully
+- Validated Workstream C:
+  - C1: MSW confirmed disabled in production (`main.tsx` guards on `MODE !== "development"`)
+  - C2: All 11 required Function App settings confirmed present in Azure
+  - C3: Auth validated via smoke test — owner access works, app loads correctly
+- Executed full smoke test checklist — all 10 items passed:
+  - Frontend loads, auth works, create/edit/delete/restore applications
+  - Interview rounds, file upload, file download, dashboard, no console errors
+- Fixed post-deploy bug: `getApplication` route `applications/{id}` was capturing requests for `applications/stats` and `applications/deleted`, returning 404 with message "Application stats not found" / "Application deleted not found"
+  - Root cause: Azure Functions runtime resolves route conflicts at host level, not by registration order; parameterized `{id}` was winning over literal segments
+  - Fix: constrained route to `applications/{id:guid}` so the runtime rejects non-UUID segments and falls through to the correct literal routes
+  - Deployed via commit `49e403f`
+
+**Decisions made:**
+
+- Route constraint `{id:guid}` is the correct fix for Azure Functions literal vs parameterized route conflicts — registration order has no effect
+
+**Blockers:** None — Phase 5 complete.
+
+**Next session:** Phase 6 — Polish & Showcase-Ready.
