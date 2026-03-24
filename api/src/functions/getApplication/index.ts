@@ -79,7 +79,7 @@ async function getApplication(
 app.http("getApplication", {
   methods: ["GET"],
   authLevel: "anonymous",
-  route: "applications/{id}",
+  route: "applications/{id:guid}",
   handler: getApplication,
 });
 
