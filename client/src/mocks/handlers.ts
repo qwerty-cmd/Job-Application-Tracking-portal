@@ -43,6 +43,32 @@ export const mockApplication: Application = {
       order: 1,
     },
   ],
+  history: [
+    {
+      id: "evt-1",
+      type: "application_created",
+      timestamp: "2026-03-15T10:30:00Z",
+      description: "Application created",
+    },
+    {
+      id: "evt-2",
+      type: "status_changed",
+      timestamp: "2026-03-18T14:00:00Z",
+      description: "Status changed to Interview Stage",
+    },
+    {
+      id: "evt-3",
+      type: "file_uploaded",
+      timestamp: "2026-03-15T10:30:00Z",
+      description: "File uploaded: contoso-resume.pdf (resume)",
+    },
+    {
+      id: "evt-4",
+      type: "interview_added",
+      timestamp: "2026-03-18T14:00:00Z",
+      description: "Interview added: Phone Screen (Round 1)",
+    },
+  ],
   isDeleted: false,
   deletedAt: null,
   createdAt: "2026-03-15T10:30:00Z",
@@ -265,6 +291,14 @@ export const handlers = [
       coverLetter: null,
       rejection: null,
       interviews: [],
+      history: [
+        {
+          id: `evt-${Date.now()}`,
+          type: "application_created",
+          timestamp: now,
+          description: "Application created",
+        },
+      ],
       isDeleted: false,
       deletedAt: null,
       createdAt: now,
