@@ -30,10 +30,10 @@ Auth:      Azure SWA built-in (GitHub provider)
 - [x] Phase 2: Backend API (CRUD Functions) — **complete (all 16 endpoints + processUpload trigger, 266 tests)**
 - [x] Phase 3: Event Streaming Pipeline — **complete (deployed, E2E verified, dead-letter configured)**
 - [x] Phase 4: Frontend (React) — **complete (dashboard, interview pipeline/dropoff analytics, accessibility/test fixes)**
-- [ ] Phase 5: CI/CD & Deployment
+- [x] Phase 5: CI/CD & Deployment — **complete (both workflows deployed, smoke tests passed, route conflict fixed)**
 - [ ] Phase 6: Polish & Showcase-Ready
 
-**Currently working on:** Phase 5 — CI/CD & Deployment.
+**Currently working on:** Phase 6 — Polish & Showcase-Ready.
 
 ## Design Steps Tracker
 

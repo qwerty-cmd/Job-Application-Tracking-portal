@@ -225,10 +225,10 @@ Risk: Pipeline flakiness from npm install variability
 Use this checklist during execution:
 
 - [x] Workflow file created and committed
-- [ ] GitHub secrets added
-- [ ] First main deployment successful
-- [ ] Smoke test checklist passed
+- [x] GitHub secrets added
+- [x] First main deployment successful
+- [x] Smoke test checklist passed
 - [x] Backend strategy decision recorded
-- [ ] CLAUDE status updated
-- [ ] TIMELINE status updated
-- [ ] DEVLOG deployment summary added
+- [x] CLAUDE status updated
+- [x] TIMELINE status updated
+- [x] DEVLOG deployment summary added
