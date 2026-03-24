@@ -13,6 +13,7 @@ import {
   notFoundError,
   serverError,
   stripBlobUrl,
+  createActivityEvent,
 } from "../../shared/response.js";
 import { Application } from "../../shared/types.js";
 
@@ -60,6 +61,10 @@ async function restoreApplication(
       ...resource,
       isDeleted: false,
       deletedAt: null,
+      history: [
+        ...(resource.history ?? []),
+        createActivityEvent("application_restored", "Application restored"),
+      ],
       updatedAt: now,
     };
 

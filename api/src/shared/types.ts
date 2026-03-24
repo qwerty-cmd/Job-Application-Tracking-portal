@@ -33,6 +33,26 @@ export interface Interview {
   order: number;
 }
 
+export const ACTIVITY_EVENT_TYPES = [
+  "application_created",
+  "status_changed",
+  "interview_added",
+  "interview_updated",
+  "interview_deleted",
+  "file_uploaded",
+  "file_deleted",
+  "application_deleted",
+  "application_restored",
+] as const;
+export type ActivityEventType = (typeof ACTIVITY_EVENT_TYPES)[number];
+
+export interface ActivityEvent {
+  id: string;
+  type: ActivityEventType;
+  timestamp: string; // ISO 8601
+  description: string;
+}
+
 export interface Application {
   id: string;
   company: string;
@@ -47,6 +67,7 @@ export interface Application {
   coverLetter: FileMetadata | null;
   rejection: Rejection | null;
   interviews: Interview[];
+  history: ActivityEvent[];
   isDeleted: boolean;
   deletedAt: string | null; // ISO 8601
   createdAt: string; // ISO 8601

@@ -13,6 +13,7 @@ import {
   FILE_TYPE_TO_FIELD,
   MAX_FILE_SIZE,
 } from "../../shared/types.js";
+import { createActivityEvent } from "../../shared/response.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -237,6 +238,13 @@ async function processUpload(
         fileName,
         uploadedAt: now,
       },
+      history: [
+        ...(resource.history ?? []),
+        createActivityEvent(
+          "file_uploaded",
+          `File uploaded: ${fileName} (${fileType})`,
+        ),
+      ],
       updatedAt: now,
     };
 
