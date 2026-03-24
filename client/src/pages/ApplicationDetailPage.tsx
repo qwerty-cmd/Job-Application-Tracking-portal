@@ -9,6 +9,7 @@ import { RejectionSection } from "@/components/RejectionSection";
 import { FileSection } from "@/components/FileSection";
 import { InterviewList } from "@/components/InterviewList";
 import { InterviewModal } from "@/components/InterviewModal";
+import { ActivityLog } from "@/components/ActivityLog";
 import { useApplication } from "@/hooks/useApplication";
 import {
   useUpdateApplication,
@@ -280,6 +281,10 @@ export function ApplicationDetailPage() {
         onDelete={handleDeleteInterview}
         onReorder={handleReorderInterviews}
       />
+
+      <Separator />
+
+      <ActivityLog history={application.history ?? []} />
 
       <InterviewModal
         key={editingInterview?.id ?? "new"}
