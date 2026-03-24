@@ -618,3 +618,30 @@ Each entry records what was done, on which machine, with which AI tool, and what
 **Blockers:** None — Phase 5 complete.
 
 **Next session:** Phase 6 — Polish & Showcase-Ready.
+
+---
+
+## 2026-03-24 — Home (Claude Code) — Session 2
+
+**What was done:**
+
+- Completed Phase 6 — Polish & Showcase-Ready (all 6 workstreams):
+  - **A: Security review** — audited all 16 Functions for auth enforcement, SAS token scoping, CORS config, processUpload validation (magic bytes, size check, idempotency). All passed. Created `docs/reviews/phase-6-security-review.md`.
+  - **B: Activity log** — added `history: ActivityEvent[]` field to Application type (API + frontend), updated 9 mutation endpoints to append activity events (`application_created`, `status_changed`, `interview_added/updated/deleted`, `file_uploaded/deleted`, `application_deleted/restored`). Built `ActivityLog` component (vertical timeline with icons, colors, relative timestamps). Backward-compatible via `resource.history ?? []`.
+  - **C: Drag-and-drop (M-1)** — verified already implemented in InterviewList.tsx with dnd-kit. No work needed.
+  - **D: Test coverage** — verified Phase 4 review gaps (T-1 through T-8) already addressed. Added activity log test. 57 frontend tests total.
+  - **E: README** — rewrote root README.md for portfolio showcase: ASCII architecture diagram, tech stack table, engineering highlights, API endpoints, project structure, local dev guide.
+  - **F: UI polish** — verified FilterBar reset, CreateApplicationModal close+navigate, InterviewList empty state, DeletedApplicationsPage empty state. Added dashboard empty state for zero applications (shows friendly message instead of empty charts).
+- Updated MSW handlers with history seed data and activity events in create handler
+- Created `docs/plans/phase-6-polish-plan.md` with full workstream breakdown
+- Created `docs/reviews/phase-5-cicd-challenges.md` documenting Phase 5 difficulties and resolutions
+
+**Test counts:** 266 API tests, 57 frontend tests — all passing, 0 TypeScript errors on both sides.
+
+**Decisions made:**
+
+- Activity events are append-only arrays embedded in the application document (not separate Cosmos items) — consistent with the interview embedding decision
+- `resource.history ?? []` pattern for backward compatibility with existing documents
+- Dashboard shows explicit empty state message when `totalApplications === 0` instead of rendering empty charts
+
+**Blockers:** None — all phases complete. Project is showcase-ready.

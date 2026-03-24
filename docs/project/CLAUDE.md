@@ -31,9 +31,9 @@ Auth:      Azure SWA built-in (GitHub provider)
 - [x] Phase 3: Event Streaming Pipeline — **complete (deployed, E2E verified, dead-letter configured)**
 - [x] Phase 4: Frontend (React) — **complete (dashboard, interview pipeline/dropoff analytics, accessibility/test fixes)**
 - [x] Phase 5: CI/CD & Deployment — **complete (both workflows deployed, smoke tests passed, route conflict fixed)**
-- [ ] Phase 6: Polish & Showcase-Ready
+- [x] Phase 6: Polish & Showcase-Ready — **complete (security review, activity log, dashboard empty state, portfolio README, 57 frontend tests)**
 
-**Currently working on:** Phase 6 — Polish & Showcase-Ready.
+**All phases complete.** Project is fully deployed and showcase-ready.
 
 ## Design Steps Tracker
 
@@ -941,6 +941,8 @@ job-tracker/
 - 2026-03-22: Phase 4 frontend — fixed all remaining deferred defects from code review: H-4 (removed redundant status), H-6 (formatApiError helper for field-level validation errors in toasts), M-2 (login page text), M-3 (empty table state with CTA), M-7 (ARIA sort headers), M-8 (ARIA file indicators), L-1 (per-card isRestoring), L-4 (replaced all emojis with Lucide React icons across 8 files), T-12 (added missing MSW handlers for interview CRUD and file delete). 35 tests passing, 0 TypeScript errors.
 - 2026-03-22: Dashboard improvements — redesigned InterviewChart from flat "Interviews by Type" to "Interview Pipeline" with numbered stage progression (Phone Screen → Take Home Test → Technical → Behavioral → Case Study → Panel → Other), connector lines, and colored indicators. Fixed browser fetch caching (`cache: "no-store"` on all API calls). Added new DropoffChart component showing where applications ended/stalled ("No Response", "Pre-Interview", or by last interview stage). Updated backend getStats endpoint with `outcomesByStage` field. 35 frontend tests, 266 backend tests passing.
 - 2026-03-22: Phase 4 marked complete and Phase 5 kicked off. Added detailed CI/CD plan at `docs/plans/phase-5-cicd-deployment-plan.md` and aligned deployment/status references across docs.
+- 2026-03-24: Phase 5 complete — both CI/CD workflows deployed, smoke tests passed, route conflict fixed (`{id:guid}` constraint).
+- 2026-03-24: Phase 6 complete — security review (all 16 Functions, SAS tokens, CORS, processUpload validated), activity log timeline (history field on all mutation endpoints + ActivityLog component), dashboard empty state for zero applications, portfolio-ready README with architecture diagram, 57 frontend tests (up from 35). Created `docs/reviews/phase-6-security-review.md` and `docs/plans/phase-6-polish-plan.md`.
 
 ---
 

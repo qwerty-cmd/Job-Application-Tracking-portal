@@ -304,4 +304,4 @@ Phase 0 (Design)
 | **M3** — Event pipeline live | File uploads trigger event-driven pipeline via Event Grid         |
 | **M4** — Frontend connected  | Full working app — add applications, upload files, track outcomes |
 | **M5** — Live on Azure       | CI/CD from GitHub, auto-deploys, live public URL                  |
-| **M6** — Showcase-ready      | Auth-protected, polished UI, documented, reproducible infra       |
+| **M6** — Showcase-ready      | Auth-protected, polished UI, documented, reproducible infra — ✅ Complete |
