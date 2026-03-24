@@ -5,7 +5,7 @@
 // See docs/project/CLAUDE.md: "All Functions return consistent { data, error } response shape"
 
 import { HttpResponseInit } from "@azure/functions";
-import { ApiError } from "./types.js";
+import { ActivityEvent, ActivityEventType, ApiError } from "./types.js";
 
 export function successResponse(
   data: unknown,
@@ -49,6 +49,21 @@ export function serverError(
   message: string = "Internal server error",
 ): HttpResponseInit {
   return errorResponse(500, "INTERNAL_ERROR", message);
+}
+
+/**
+ * Create an activity event for the application history log.
+ */
+export function createActivityEvent(
+  type: ActivityEventType,
+  description: string,
+): ActivityEvent {
+  return {
+    id: crypto.randomUUID(),
+    type,
+    timestamp: new Date().toISOString(),
+    description,
+  };
 }
 
 /**

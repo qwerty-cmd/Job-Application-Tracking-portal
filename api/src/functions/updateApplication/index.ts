@@ -15,6 +15,7 @@ import {
   validationError,
   serverError,
   stripBlobUrl,
+  createActivityEvent,
 } from "../../shared/response.js";
 import {
   Application,
@@ -138,9 +139,21 @@ async function updateApplication(
       sanitized.rejection = sanitizeRejection(body.rejection);
     }
 
+    // Build history events for this update
+    const newEvents = [];
+    if (sanitized.status && sanitized.status !== resource.status) {
+      newEvents.push(
+        createActivityEvent(
+          "status_changed",
+          `Status changed to ${sanitized.status}`,
+        ),
+      );
+    }
+
     const merged = {
       ...resource,
       ...sanitized,
+      history: [...(resource.history ?? []), ...newEvents],
       updatedAt: new Date().toISOString(),
     };
 

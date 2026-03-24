@@ -15,6 +15,7 @@ import {
   serverError,
   validationError,
   stripBlobUrl,
+  createActivityEvent,
 } from "../../shared/response.js";
 import { Application, Interview } from "../../shared/types.js";
 import { validateUpdateInterview } from "../../shared/validation.js";
@@ -105,6 +106,13 @@ async function updateInterview(
     const updated = {
       ...resource,
       interviews: updatedInterviews,
+      history: [
+        ...(resource.history ?? []),
+        createActivityEvent(
+          "interview_updated",
+          `Interview updated: ${updatedInterview.type} (Round ${updatedInterview.round})`,
+        ),
+      ],
       updatedAt: now,
     };
 

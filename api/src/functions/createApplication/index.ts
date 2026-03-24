@@ -14,6 +14,7 @@ import {
   errorResponse,
   validationError,
   serverError,
+  createActivityEvent,
 } from "../../shared/response.js";
 import {
   Application,
@@ -101,6 +102,7 @@ async function createApplication(
       coverLetter: null,
       rejection: sanitizeRejection(body.rejection),
       interviews: [],
+      history: [createActivityEvent("application_created", "Application created")],
       isDeleted: false,
       deletedAt: null,
       createdAt: now,

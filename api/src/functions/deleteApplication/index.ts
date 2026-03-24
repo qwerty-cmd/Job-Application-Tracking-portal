@@ -12,6 +12,7 @@ import {
   successResponse,
   notFoundError,
   serverError,
+  createActivityEvent,
 } from "../../shared/response.js";
 import { Application } from "../../shared/types.js";
 
@@ -59,6 +60,10 @@ async function deleteApplication(
       ...resource,
       isDeleted: true,
       deletedAt: now,
+      history: [
+        ...(resource.history ?? []),
+        createActivityEvent("application_deleted", "Application soft-deleted"),
+      ],
       updatedAt: now,
     };
 

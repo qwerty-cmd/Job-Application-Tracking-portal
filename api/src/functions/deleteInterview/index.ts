@@ -13,6 +13,7 @@ import {
   notFoundError,
   serverError,
   stripBlobUrl,
+  createActivityEvent,
 } from "../../shared/response.js";
 import { Application } from "../../shared/types.js";
 
@@ -68,10 +69,18 @@ async function deleteInterview(
     }));
 
     // 5. Update application
+    const deleted = resource.interviews[interviewIndex];
     const now = new Date().toISOString();
     const updated = {
       ...resource,
       interviews: renumbered,
+      history: [
+        ...(resource.history ?? []),
+        createActivityEvent(
+          "interview_deleted",
+          `Interview removed: ${deleted.type} (Round ${deleted.round})`,
+        ),
+      ],
       updatedAt: now,
     };
 

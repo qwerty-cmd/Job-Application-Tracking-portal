@@ -14,6 +14,7 @@ import {
   validationError,
   notFoundError,
   serverError,
+  createActivityEvent,
 } from "../../shared/response.js";
 import {
   Application,
@@ -95,6 +96,13 @@ async function deleteFile(
     const updated = {
       ...resource,
       [fieldName]: null,
+      history: [
+        ...(resource.history ?? []),
+        createActivityEvent(
+          "file_deleted",
+          `File deleted: ${validatedFileType}`,
+        ),
+      ],
       updatedAt: now,
     };
     const { requestCharge: replaceCharge } = await container

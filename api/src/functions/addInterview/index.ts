@@ -16,6 +16,7 @@ import {
   serverError,
   validationError,
   stripBlobUrl,
+  createActivityEvent,
 } from "../../shared/response.js";
 import { Application, STATUS_ORDER } from "../../shared/types.js";
 import { validateCreateInterview } from "../../shared/validation.js";
@@ -95,12 +96,29 @@ async function addInterview(
         ? "Interview Stage"
         : resource.status;
 
-    // 7. Update application
+    // 7. Build history events
+    const newEvents = [
+      createActivityEvent(
+        "interview_added",
+        `Interview added: ${newInterview.type} (Round ${newInterview.round})`,
+      ),
+    ];
+    if (newStatus !== resource.status) {
+      newEvents.push(
+        createActivityEvent(
+          "status_changed",
+          `Status changed to ${newStatus}`,
+        ),
+      );
+    }
+
+    // 8. Update application
     const now = new Date().toISOString();
     const updated = {
       ...resource,
       status: newStatus,
       interviews: [...resource.interviews, newInterview],
+      history: [...(resource.history ?? []), ...newEvents],
       updatedAt: now,
     };
 
