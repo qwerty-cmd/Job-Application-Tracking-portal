@@ -15,9 +15,13 @@ This folder contains all project documentation.
   - `frontend-workflow.md` - frontend process guidance
 - `plans/`
   - `phase-5-cicd-deployment-plan.md` - CI/CD execution checklist
+  - `phase-6-polish-plan.md` - Phase 6 polish & showcase plan
   - `logging-improvement-plan.md` - logging improvements and rationale
 - `reviews/`
-  - phase-specific review findings and fixes
+  - `phase-2-code-review.md` - security audit and fixes for backend API
+  - `phase-3-deployment-challenges.md` - Function App deployment issues and resolutions
+  - `phase-4-frontend-review.md` - frontend code review findings and fixes
+  - `phase-5-cicd-challenges.md` - CI/CD workflow and route conflict issues and resolutions
 - `wireframes/`
   - UI design wireframes and notes
 - `rca/`
