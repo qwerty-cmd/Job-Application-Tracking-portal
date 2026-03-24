@@ -81,33 +81,46 @@ export function DashboardPage() {
 
       <SummaryCards stats={stats} />
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <StatusChart stats={stats} />
-        <InterviewChart stats={stats} />
-      </div>
+      {stats.totalApplications === 0 ? (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <p className="text-muted-foreground">
+              No applications in this date range. Create your first application
+              to see analytics here.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          <div className="grid gap-6 lg:grid-cols-2">
+            <StatusChart stats={stats} />
+            <InterviewChart stats={stats} />
+          </div>
 
-      <DropoffChart stats={stats} />
+          <DropoffChart stats={stats} />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Quick Insights</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-            <li>
-              Response rate: {responded} of {stats.totalApplications} apps got a
-              response ({responseRate}%)
-            </li>
-            <li>Total interviews conducted: {stats.totalInterviews}</li>
-            {(stats.byStatus["Accepted"] ?? 0) > 0 && (
-              <li>Offers accepted: {stats.byStatus["Accepted"]}</li>
-            )}
-            <li className="italic">
-              (v2: AI-powered analysis will appear here)
-            </li>
-          </ul>
-        </CardContent>
-      </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Quick Insights</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                <li>
+                  Response rate: {responded} of {stats.totalApplications} apps
+                  got a response ({responseRate}%)
+                </li>
+                <li>Total interviews conducted: {stats.totalInterviews}</li>
+                {(stats.byStatus["Accepted"] ?? 0) > 0 && (
+                  <li>Offers accepted: {stats.byStatus["Accepted"]}</li>
+                )}
+                <li className="italic">
+                  (v2: AI-powered analysis will appear here)
+                </li>
+              </ul>
+            </CardContent>
+          </Card>
+        </>
+      )}
     </div>
   );
 }
