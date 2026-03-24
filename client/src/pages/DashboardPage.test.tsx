@@ -160,6 +160,43 @@ describe("DashboardPage", () => {
     expect(screen.getByRole("button", { name: /apply/i })).toBeInTheDocument();
   });
 
+  it("shows empty state when there are zero applications", async () => {
+    server.use(
+      http.get("/api/applications/stats", () => {
+        return HttpResponse.json({
+          data: {
+            ...fixedStats,
+            totalApplications: 0,
+            byStatus: {
+              Applying: 0,
+              "Application Submitted": 0,
+              "Recruiter Screening": 0,
+              "Interview Stage": 0,
+              "Pending Offer": 0,
+              Accepted: 0,
+              Rejected: 0,
+              Withdrawn: 0,
+            },
+            totalInterviews: 0,
+          },
+          error: null,
+        });
+      }),
+    );
+
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/no applications in this date range/i),
+      ).toBeInTheDocument();
+    });
+
+    // Charts and Quick Insights should NOT be visible
+    expect(screen.queryByText("Applications by Status")).not.toBeInTheDocument();
+    expect(screen.queryByText("Quick Insights")).not.toBeInTheDocument();
+  });
+
   it("shows error state when API fails", async () => {
     server.use(
       http.get("/api/applications/stats", () => {

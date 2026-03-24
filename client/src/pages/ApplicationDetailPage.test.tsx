@@ -68,7 +68,7 @@ describe("ApplicationDetailPage", () => {
     });
 
     // Mock app has one interview: Phone Screen with Jane Smith
-    expect(screen.getByText(/phone screen/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/phone screen/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/jane smith/i)).toBeInTheDocument();
   });
 
@@ -301,6 +301,22 @@ describe("ApplicationDetailPage", () => {
     // Reason label and notes label
     expect(screen.getByLabelText(/reason/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/notes/i)).toBeInTheDocument();
+  });
+
+  // --- Activity Log tests ---
+
+  it("displays activity log section with history events", async () => {
+    renderDetailPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Contoso Ltd")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Activity Log")).toBeInTheDocument();
+    expect(screen.getByText("Application created")).toBeInTheDocument();
+    expect(
+      screen.getByText("Status changed to Interview Stage"),
+    ).toBeInTheDocument();
   });
 
   it("shows Re-upload button for files that already have uploads", async () => {
