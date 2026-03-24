@@ -18,11 +18,11 @@ A full-stack, single-user job application tracking SPA deployed on Azure (all fr
 | 1 | Infrastructure (Bicep — 16 Azure resources) | ✅ Complete (deployed) |
 | 2 | Backend API (16 endpoints + processUpload trigger) | ✅ Complete (266 tests) |
 | 3 | Event Streaming Pipeline (Event Grid) | ✅ Complete (deployed, E2E verified) |
-| 4 | Frontend (React — dashboard, interviews, files) | ✅ Complete (35+ tests) |
+| 4 | Frontend (React — dashboard, interviews, files) | ✅ Complete (57 tests) |
 | 5 | CI/CD & Deployment (GitHub Actions) | ✅ Complete |
-| 6 | Polish & Showcase | 🔄 In Progress |
+| 6 | Polish & Showcase | ✅ Complete |
 
-**Currently on:** Phase 6 — Polish & Showcase. Both CI/CD workflows are live and smoke-tested. A route conflict bug was fixed post-deploy (`getApplication` route constrained to `{id:guid}` to prevent capturing literal paths `stats` and `deleted`).
+**All phases complete.** The project is fully deployed and showcase-ready. Phase 6 added: security review, activity log timeline, dashboard empty state, portfolio README, and 57 frontend tests (up from 35).
 
 ---
 

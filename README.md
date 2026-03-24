@@ -1,256 +1,214 @@
 # Job Application Tracking Portal
 
-A full-stack app to track job applications, interviews, documents, and status analytics.
+A full-stack, serverless job application tracker built on Azure — from infrastructure as code through CI/CD. Track applications, interviews, file uploads, and analytics in a single-page app deployed entirely on Azure's free tier.
+
+---
+
+## Architecture
+
+```
+                            +--------------------------+
+                            |  Azure Static Web Apps   |
+                            |  (React SPA + GitHub     |
+                            |   OAuth)                 |
+                            +----+----------+----------+
+                                 |          |
+                     REST API    |          |  Direct PUT
+                     calls       |          |  via SAS token
+                                 v          v
+                 +---------------+--+  +----+-----------+
+                 |  Azure Functions  |  | Azure Blob     |
+                 |  (16 endpoints +  |  | Storage        |
+                 |   Event Grid      |  | (resumes, CLs, |
+                 |   trigger)        |  |  JDs)          |
+                 +---+----------+----+  +----+-----------+
+                     |          |            |
+                     v          v            v
+              +------+---+  +--+---+  +-----+----------+
+              | Cosmos DB |  | SAS  |  | Event Grid     |
+              | (NoSQL,   |  | token|  | (BlobCreated   |
+              |  free     |  | gen  |  |  -> process-   |
+              |  tier)    |  |      |  |  Upload)       |
+              +-----------+  +------+  +----------------+
+```
+
+**All infrastructure provisioned via Bicep** (`infra/main.bicep`) — 16 Azure resources, zero portal clicks.
+
+---
 
 ## Tech Stack
 
-- Frontend: React + TypeScript + Vite (`client/`)
-- Backend: Azure Functions (Node.js + TypeScript) (`api/`)
-- Database: Azure Cosmos DB (NoSQL)
-- File Storage: Azure Blob Storage
-- Eventing: Azure Event Grid
-- Infrastructure: Bicep (`infra/`)
-- Hosting: Azure Static Web Apps + Azure Functions
+| Layer | Technology |
+|-------|-----------|
+| Frontend | React 19, TypeScript, Vite, Tailwind CSS 4, Shadcn/UI, React Router 7, TanStack Table, dnd-kit |
+| Backend | Azure Functions v4, Node.js 20, TypeScript |
+| Database | Azure Cosmos DB (NoSQL, free tier) |
+| File Storage | Azure Blob Storage with SAS token direct upload |
+| Events | Azure Event Grid (BlobCreated triggers) |
+| Auth | Azure SWA built-in GitHub OAuth + custom `owner` role |
+| Infrastructure | Bicep (16 resources) |
+| CI/CD | GitHub Actions (2 workflows: SWA + Functions) |
+| Testing | Vitest (266 API tests + 57 frontend tests), React Testing Library, MSW |
 
-## Quick Start (Local)
+**Estimated monthly cost: $0** (all services within Azure free tiers)
 
-### 1) Frontend
+---
 
-```bash
-cd client
-npm install
-npm run dev
+## Key Engineering Highlights
+
+**Event-driven file processing** — Files upload directly from the browser to Blob Storage via short-lived SAS tokens (5 min, single-blob scope, create+write only). Event Grid fires a `BlobCreated` event that triggers `processUpload`, which validates file size, checks magic bytes (PDF/DOCX/HTML), implements "latest wins" for re-uploads, and is fully idempotent for Event Grid retries.
+
+**Auth without a gateway** — SWA Free tier doesn't support linked backends, so every Function validates the `x-ms-client-principal` header and checks for the `owner` role via a shared `requireOwner()` helper. Same security outcome, zero extra cost.
+
+**Embedded interviews with drag-and-drop** — Interviews are embedded in the application document (not separate Cosmos items). Each round has a display `order` field, reorderable via dnd-kit drag-and-drop in the UI, persisted via a PATCH reorder endpoint.
+
+**Activity timeline** — Every mutation (status change, file upload, interview add/delete) appends an `ActivityEvent` to the document's `history` array, displayed as a vertical timeline on the detail page.
+
+**Defence in depth on uploads** — Client-side extension/size check, SAS token scoped to single blob, `processUpload` validates magic bytes and file size server-side, 90-day lifecycle policy catches orphaned blobs.
+
+---
+
+## Features
+
+- Create, edit, and soft-delete job applications with full undo/restore
+- Status lifecycle tracking (Applying through Accepted/Rejected/Withdrawn)
+- Interview round management with drag-and-drop reordering
+- Direct file uploads (resume, cover letter, job description) via SAS tokens
+- Dashboard with status distribution, interview pipeline, and dropoff analytics
+- Activity log timeline per application
+- GitHub OAuth with private owner-only access
+- Responsive UI with Shadcn/UI components
+
+---
+
+## API Endpoints
+
+16 REST endpoints + 1 Event Grid trigger, all returning `{ data, error }`:
+
+| Method | Route | Description |
+|--------|-------|-------------|
+| GET | `/api/applications` | List (paginated, filtered, sorted) |
+| POST | `/api/applications` | Create |
+| GET | `/api/applications/:id` | Full detail |
+| PATCH | `/api/applications/:id` | Partial update |
+| DELETE | `/api/applications/:id` | Soft delete |
+| PATCH | `/api/applications/:id/restore` | Restore |
+| GET | `/api/applications/deleted` | List soft-deleted |
+| GET | `/api/applications/stats` | Dashboard analytics |
+| POST | `/api/applications/:id/interviews` | Add interview |
+| PATCH | `/api/applications/:id/interviews/:iid` | Update interview |
+| DELETE | `/api/applications/:id/interviews/:iid` | Remove interview |
+| PATCH | `/api/applications/:id/interviews/reorder` | Reorder interviews |
+| POST | `/api/upload/sas-token` | Upload SAS token |
+| GET | `/api/download/sas-token` | Download SAS token |
+| DELETE | `/api/applications/:id/files/:fileType` | Delete file |
+| — | `processUpload` (Event Grid) | Process uploaded blob |
+
+---
+
+## Project Structure
+
 ```
-
-### 2) API
-
-```bash
-cd api
-npm install
-npm run build
-```
-
-To run the Functions host locally in watch mode, use the VS Code task `func: host start`.
-
-## Project Directory Structure
-
-```
-job-application-tracking-portal/
+/
+├── api/               Azure Functions backend (TypeScript, 16 endpoints)
+│   ├── src/functions/  One directory per endpoint
+│   └── src/shared/     Auth, Cosmos client, validation, response helpers
+├── client/            React frontend (TypeScript + Vite)
+│   ├── src/pages/      5 pages (Dashboard, Applications, Detail, Deleted, Login)
+│   ├── src/components/ 19 components (Shadcn/UI + custom)
+│   ├── src/hooks/      Custom React hooks (mutations, data fetching)
+│   └── src/mocks/      MSW handlers for dev/test
+├── infra/             Bicep IaC (main.bicep + parameters.json)
+├── docs/              Design docs, reviews, plans, RCAs
+│   ├── project/        CLAUDE.md (source of truth), DEVLOG, TIMELINE
+│   ├── reviews/        Phase-by-phase code review findings
+│   └── plans/          CI/CD and deployment plans
 ├── .github/
-│   ├── copilot-instructions.md        ← START HERE for AI agents: architecture, tech stack, workflow
-│   ├── instructions/                  ← Coding conventions for specific file types
-│   │   ├── api-conventions.instructions.md    (Azure Functions API patterns)
-│   │   ├── bicep.instructions.md               (Infrastructure naming and structure)
-│   │   └── testing.instructions.md             (Test patterns and TDD approach)
-│   ├── agents/                        ← AI agent definitions (test-writer, implementer, reviewer, etc.)
-│   └── workflows/                     ← GitHub Actions CI/CD pipelines
-│       └── azure-static-web-apps.yml
-│
-├── api/                               ← Azure Functions backend (Node.js + TypeScript)
-│   ├── src/
-│   │   ├── index.ts                           (Function registry entry point)
-│   │   ├── functions/                         (16 API endpoints + processUpload trigger)
-│   │   │   ├── createApplication/
-│   │   │   ├── getApplication/
-│   │   │   ├── listApplications/
-│   │   │   ├── updateApplication/
-│   │   │   ├── deleteApplication/
-│   │   │   ├── restoreApplication/
-│   │   │   ├── listDeleted/
-│   │   │   ├── getStats/
-│   │   │   ├── addInterview/
-│   │   │   ├── updateInterview/
-│   │   │   ├── deleteInterview/
-│   │   │   ├── reorderInterviews/
-│   │   │   ├── uploadSasToken/
-│   │   │   ├── downloadSasToken/
-│   │   │   ├── deleteFile/
-│   │   │   └── processUpload/                 (Event Grid trigger for blob uploads)
-│   │   └── shared/                            (Backend utilities and singletons)
-│   │       ├── auth.ts                        (requireOwner() role validation)
-│   │       ├── cosmosClient.ts                (Singleton Cosmos DB client)
-│   │       ├── storageClient.ts               (Singleton Azure Blob Storage client)
-│   │       ├── response.ts                    (Consistent { data, error } envelope)
-│   │       ├── logger.ts                      (Logging and telemetry)
-│   │       ├── types.ts                       (Domain types, enums, constants)
-│   │       ├── validation.ts                  (Request body validators)
-│   │       └── telemetry.ts                   (Application Insights integration)
-│   ├── host.json                              (Functions runtime config)
-│   ├── local.settings.json                    (Local dev env vars: Cosmos, Storage keys)
-│   ├── openapi.yaml                           (API contract/specification)
-│   ├── package.json                           (Dependencies, build scripts)
-│   ├── tsconfig.json                          (TypeScript config)
-│   ├── vitest.config.ts                       (Test runner config)
-│   └── Vitest test files (.test.ts)           (266 tests covering all endpoints)
-│
-├── client/                            ← React frontend (TypeScript + Vite)
-│   ├── src/
-│   │   ├── main.tsx                           (App entry, MSW setup for dev mode)
-│   │   ├── App.tsx                            (Route and auth layout)
-│   │   ├── components/
-│   │   │   ├── ApplicationsTable.tsx           (Main list view, Excel-style table)
-│   │   │   ├── CreateApplicationModal.tsx     (Form to create new application)
-│   │   │   ├── DetailFields.tsx               (Application detail display)
-│   │   │   ├── DetailHeader.tsx               (Header with status + rejection)
-│   │   │   ├── DropoffChart.tsx               (Where applications stall/end)
-│   │   │   ├── InterviewChart.tsx             (Interview pipeline progression)
-│   │   │   ├── InterviewList.tsx              (Nested interview rounds)
-│   │   │   ├── InterviewModal.tsx             (Add/edit interview dialog)
-│   │   │   ├── FileSection.tsx                (Upload/download files UI)
-│   │   │   ├── StatusChart.tsx                (Count per status stage)
-│   │   │   ├── SummaryCards.tsx               (KPI cards for dashboard)
-│   │   │   ├── FilterBar.tsx                  (Time period + view filters)
-│   │   │   ├── NavBar.tsx                     (Header with auth logout)
-│   │   │   ├── ProtectedRoute.tsx             (Role-based route guard)
-│   │   │   ├── ErrorBoundary.tsx              (Error recovery)
-│   │   │   ├── StatusBadge.tsx                (Color-coded status indicator)
-│   │   │   └── ui/                            (Shadcn/ui + Radix components)
-│   │   ├── pages/                             (Page components)
-│   │   ├── hooks/                             (Custom React hooks)
-│   │   ├── contexts/                          (React context providers)
-│   │   ├── lib/                               (Utilities: API client, formatting)
-│   │   ├── types/                             (TypeScript domain types)
-│   │   ├── mocks/                             (MSW handlers for dev/test)
-│   │   │   ├── handlers.ts                    (Mock API responses for all endpoints)
-│   │   │   ├── browser.ts                     (MSW browser worker)
-│   │   │   └── server.ts                      (MSW Node server for Vitest)
-│   │   └── *.test.tsx                         (35+ component/integration tests)
-│   ├── public/
-│   │   ├── mockServiceWorker.js               (MSW service worker)
-│   │   └── staticwebapp.config.json           (SWA routing and auth config)
-│   ├── index.html                             (HTML entry point)
-│   ├── package.json                           (Dependencies, build scripts)
-│   ├── vite.config.ts                         (Vite bundler config)
-│   ├── vitest.config.ts                       (Test runner config)
-│   └── tsconfig.json                          (TypeScript config)
-│
-├── infra/                             ← Infrastructure as Code (Bicep)
-│   ├── main.bicep                             (Main template, all 16 Azure resources)
-│   └── parameters.json                        (Env-specific param values)
-│
-├── postman/                           ← API test collections
-│   ├── job-application-tracker-api.postman_collection.json
-│   ├── job-tracker-azure.postman_environment.json
-│   ├── job-tracker-local.postman_environment.json
-│   └── README.md                              (Postman collection guide)
-│
-├── docs/
-│   ├── project/
-│   │   ├── CLAUDE.md                          ⭐ SOURCE OF TRUTH: Design decisions, data model, API contract, every detail
-│   │   ├── SOLUTION.md                        High-level solution overview
-│   │   ├── DEVLOG.md                          Session-by-session work log
-│   │   ├── TIMELINE.md                        Project phases and effort estimates
-│   │   └── WORKFLOW.md                        TDD workflow and AI agent playbook
-│   ├── guides/
-│   │   ├── development-modes.md               Local vs live backend vs production modes
-│   │   ├── frontend-workflow.md               Frontend build and component patterns
-│   │   ├── rebuild-parity-master-prompt.md    📋 HANDOFF: Copy/paste prompt for new dev/AI rebuild
-│   │   └── setup-for-ai-rebuild.md            🤖 AI AGENTS: Pre-work, env setup, conversation flow
-│   ├── plans/
-│   │   ├── phase-5-cicd-deployment-plan.md   CI/CD rollout checklist
-│   │   ├── cicd-secrets-checklist.md          GitHub Actions secrets config
-│   │   └── logging-improvement-plan.md        Logging roadmap
-│   ├── reviews/
-│   │   ├── phase-2-code-review.md             Backend security and quality findings
-│   │   ├── phase-3-deployment-challenges.md   Event pipeline deployment notes
-│   │   └── phase-4-frontend-review.md         Frontend accessibility and test fixes
-│   ├── rca/
-│   │   └── filter-bar-not-working.md          Root cause analysis examples
-│   ├── wireframes/
-│   │   └── phase-4-wireframes.md              UI/UX designs for dashboard and forms
-│   └── README.md                              Docs navigation index
-│
-├── .github/ (repeated for clarity)
-│   └── copilot-instructions.md                ⭐ Quick reference for AI agents
-│
-├── swa-cli.config.json                        SWA CLI config for local dev
-├── package.json                               (Root workspace config if monorepo)
-└── README.md                                  ← You are here
+│   ├── workflows/      2 CI/CD workflows (SWA + Functions)
+│   └── instructions/   Coding conventions
+└── postman/           API test collections
 ```
 
-### Key Files at a Glance
+---
 
-| File/Folder                                   | Purpose                                                              | For Whom                          |
-| --------------------------------------------- | -------------------------------------------------------------------- | --------------------------------- |
-| `.github/copilot-instructions.md`             | Project context hub (architecture, tech, status, workflow)           | AI agents, new devs               |
-| `docs/project/CLAUDE.md`                      | Source of truth for design, data model, API contract, every decision | Developers, reviewers             |
-| `docs/guides/rebuild-parity-master-prompt.md` | Copy/paste prompt to rebuild project with exact parity               | New devs, AI agents               |
-| `docs/guides/setup-for-ai-rebuild.md`         | Pre-work checklist, env setup, AI conversation flow                  | Anyone handing off to Claude/AI   |
-| `.github/instructions/`                       | Coding conventions for API, Bicep, and tests                         | Developers following TDD          |
-| `docs/project/DEVLOG.md`                      | Session history—what was built when and why                          | Context recovery between sessions |
-| `api/local.settings.json`                     | Local dev secrets (Cosmos key, Storage key)                          | Backend developers                |
-| `infra/main.bicep`                            | All 16 Azure resources (Cosmos, Functions, Storage, Event Grid, SWA) | DevOps, infrastructure review     |
+## Local Development
+
+**Prerequisites:** Node.js 20+, npm, Azure Functions Core Tools v4
+
+```bash
+# Frontend only (MSW mocks the API)
+cd client && npm install && npm run dev
+
+# Frontend + real Functions backend
+# (requires local.settings.json with Cosmos/Storage keys)
+cd api && npm install && npm run build
+swa start live-api
+
+# Run all tests
+cd api && npm test        # 266 backend tests
+cd client && npm test     # 56 frontend tests
+```
+
+See [docs/guides/development-modes.md](docs/guides/development-modes.md) for detailed setup.
+
+---
+
+## CI/CD
+
+Two GitHub Actions workflows deploy on push to `main`:
+
+- **`azure-static-web-apps.yml`** — Frontend: test, build, deploy to SWA
+- **`azure-functions.yml`** — Backend: test, build, deploy to Function App
+
+Both include quality gates (lint + test + build) that must pass before deploy. Deploy jobs are gated to `main` only.
+
+---
+
+## Infrastructure (Bicep)
+
+All 16 Azure resources defined in [`infra/main.bicep`](infra/main.bicep):
+
+Cosmos DB (free tier) | Storage Account + 4 blob containers | Function App (Consumption) | Static Web App (free) | Event Grid system topic + subscription | App Service Plan | Log Analytics + App Insights
+
+Deploy with:
+
+```bash
+az deployment group create -g job-tracker-rg -f infra/main.bicep -p infra/parameters.json
+```
+
+---
 
 ## Testing
 
-### Frontend
+| Suite | Tests | Coverage |
+|-------|-------|----------|
+| API (Vitest) | 266 | All 16 endpoints + processUpload, auth, validation |
+| Frontend (Vitest + RTL + MSW) | 57 | Pages, components, auth flows, form validation |
 
-```bash
-cd client
-npm test
-```
+Tests run in CI before every deploy. API tests mock Cosmos and Storage. Frontend tests use MSW for network-level mocking.
 
-### API
+---
 
-```bash
-cd api
-npm test
-```
+## Phase Roadmap
 
-## Documentation Map
+| Phase | Description | Status |
+|-------|-------------|--------|
+| 0 | Architecture & Design | Complete |
+| 1 | Infrastructure (Bicep) | Complete — 16 resources deployed |
+| 2 | Backend API | Complete — 266 tests |
+| 3 | Event Streaming Pipeline | Complete — E2E verified |
+| 4 | Frontend (React) | Complete — 56 tests |
+| 5 | CI/CD & Deployment | Complete — both workflows live |
+| 6 | Polish & Showcase | Complete |
 
-### Getting Started (Read First)
+---
 
-1. **`.github/copilot-instructions.md`** — Quick overview: architecture, tech stack, current status, quick reference
-2. **`docs/project/CLAUDE.md`** — Source of truth: design decisions, data model, API contract, implementation details
-3. **`docs/project/SOLUTION.md`** — High-level solution overview: system architecture, services, flows
+## Documentation
 
-### For Developers
-
-- **`docs/guides/development-modes.md`** — Setup instructions for local dev, live API, and production
-- **`docs/guides/frontend-workflow.md`** — Frontend build patterns, component structure, workflow tips
-- **`.github/instructions/`** — Coding conventions files:
-  - `api-conventions.instructions.md` — Response shapes, Cosmos patterns, error handling
-  - `bicep.instructions.md` — Infrastructure resource naming, structure, outputs
-  - `testing.instructions.md` — Test patterns, TDD approach, naming conventions
-
-### For Handoff & AI Agents
-
-- **`docs/guides/rebuild-parity-master-prompt.md`** — 📋 Copy/paste prompt for exact project rebuild
-- **`docs/guides/setup-for-ai-rebuild.md`** — 🤖 Pre-work checklist, env setup, AI conversation flow examples
-
-### Project Planning & Tracking
-
-- **`docs/project/DEVLOG.md`** — Session-by-session work log and progress history
-- **`docs/project/TIMELINE.md`** — Project phases, effort estimates, current phase status
-- **`docs/project/WORKFLOW.md`** — AI workflow playbook and TDD pattern documentation
-
-### Deployment & CI/CD
-
-- **`docs/plans/phase-5-cicd-deployment-plan.md`** — CI/CD rollout checklist and step-by-step guide
-- **`docs/plans/cicd-secrets-checklist.md`** — GitHub Actions secrets configuration
-- **`.github/workflows/azure-static-web-apps.yml`** — Automated SWA deploy workflow
-- **`docs/plans/logging-improvement-plan.md`** — Observability and logging roadmap
-
-### Code Review & Quality
-
-- **`docs/reviews/phase-2-code-review.md`** — Backend security and quality findings
-- **`docs/reviews/phase-3-deployment-challenges.md`** — Event pipeline deployment notes
-- **`docs/reviews/phase-4-frontend-review.md`** — Frontend accessibility, testing notes, fixes
-
-### Reference & Design
-
-- **`docs/rca/`** — Root cause analysis examples and incident logs
-- **`docs/wireframes/`** — UI/UX designs for dashboard, forms, and data displays
-- **`postman/`** — API test collections and environment configs
-
-## Current Status
-
-- [x] Phase 1: Infrastructure (Bicep) — deployed
-- [x] Phase 2: Backend API (CRUD + processUpload) — 266 tests passing
-- [x] Phase 3: Event Pipeline (Event Grid) — deployed and verified
-- [x] Phase 4: Frontend (React UI) — 35+ tests passing, complete
-- [ ] Phase 5: CI/CD & Deployment — in progress
-- [ ] Phase 6: Polish & Showcase
-
-**Next Step:** See `docs/plans/phase-5-cicd-deployment-plan.md` for CI/CD rollout checklist.
+| Document | Purpose |
+|----------|---------|
+| [docs/project/CLAUDE.md](docs/project/CLAUDE.md) | Source of truth — architecture, data model, API contract, all decisions |
+| [docs/project/DEVLOG.md](docs/project/DEVLOG.md) | Session-by-session development history |
+| [docs/project/TIMELINE.md](docs/project/TIMELINE.md) | Phase planning and effort estimates |
+| [docs/reviews/](docs/reviews/) | Code review findings per phase |
+| [docs/plans/](docs/plans/) | CI/CD and deployment plans |
