@@ -220,6 +220,38 @@ Risk: Pipeline flakiness from npm install variability
 
 - Mitigation: Use npm ci and cache node modules in workflow
 
+## Difficulties Faced (Captured Notes)
+
+1. `workflow_dispatch` runs did not deploy
+
+- Difficulty: Deploy jobs were initially gated to `push` events only, so manual runs did not progress to deployment.
+- Mitigation: Updated both workflow deploy conditions to allow `push` and `workflow_dispatch`, while still restricting deploys to `main`.
+- Lesson learnt: Always validate trigger logic against all intended operational paths (automated and manual) before finalizing pipeline guardrails.
+
+2. Drift between docs and actual CI/CD implementation
+
+- Difficulty: Phase 5 docs described older assumptions after workflows had already been implemented.
+- Mitigation: Synced the Phase 5 plan, secrets checklist, CLAUDE context, and DEVLOG with the live workflow behavior.
+- Lesson learnt: Documentation should be treated as an operational artifact and updated in the same change window as workflow updates.
+
+3. GitHub secret verification not automatable in local shell
+
+- Difficulty: `gh` CLI was not available on the machine, blocking command-line verification.
+- Mitigation: Used GitHub repository UI as the operational fallback for required secrets validation.
+- Lesson learnt: Define a no-CLI fallback path for critical release checks so verification can continue without local tooling dependencies.
+
+4. Build-time env dependency on frontend telemetry
+
+- Difficulty: Frontend telemetry depends on `VITE_APPINSIGHTS_CONNECTION_STRING` at build time; missing secret results in no client telemetry.
+- Mitigation: Explicitly documented the required secret wiring in workflow/env notes and validation checklist.
+- Lesson learnt: Build-time environment variables must be part of release readiness checks, not only implementation notes.
+
+5. Platform constraint impacting deployment architecture (carryover risk)
+
+- Difficulty: SWA Free tier limitations required standalone Functions auth handling, which affected CI/CD validation checks.
+- Mitigation: Kept Function-level `owner` authorization checks as the deployment-time source of truth and reflected this in smoke-test expectations.
+- Lesson learnt: Hosting-tier constraints can alter security and deployment responsibilities, so test criteria and runbooks must explicitly track those architectural decisions.
+
 ## Tracking Template
 
 Use this checklist during execution:
