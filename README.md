@@ -2,6 +2,8 @@
 
 A full-stack, serverless job application tracker built on Azure — from infrastructure as code through CI/CD. Track applications, interviews, file uploads, and analytics in a single-page app deployed entirely on Azure's free tier.
 
+This app is my first end to end project assisted with claude code
+
 ---
 
 ## Architecture
