@@ -21,8 +21,9 @@ A full-stack, single-user job application tracking SPA deployed on Azure (all fr
 | 4 | Frontend (React — dashboard, interviews, files) | ✅ Complete (57 tests) |
 | 5 | CI/CD & Deployment (GitHub Actions) | ✅ Complete |
 | 6 | Polish & Showcase | ✅ Complete |
+| V2 | Public Demo Mode | ✅ Complete (68 frontend tests) |
 
-**All phases complete.** The project is fully deployed and showcase-ready. Phase 6 added: security review, activity log timeline, dashboard empty state, portfolio README, and 57 frontend tests (up from 35).
+**All phases complete.** The project is fully deployed and showcase-ready. V2 added a fully client-side public demo mode: MSW intercepts all API calls, no Azure traffic, no account needed. 68 frontend tests (up from 57).
 
 ---
 
@@ -39,7 +40,9 @@ A full-stack, single-user job application tracking SPA deployed on Azure (all fr
 │   │   ├── pages/     ApplicationsPage, ApplicationDetailPage, DashboardPage, DeletedApplicationsPage, LoginPage
 │   │   ├── components/ Feature + UI components (Shadcn/Radix)
 │   │   ├── hooks/     Custom React hooks
-│   │   ├── api/       API client functions
+│   │   ├── lib/       api.ts, demoMode.ts (MSW worker lifecycle + sessionStorage), logger.ts, appInsights.ts
+│   │   ├── contexts/  AuthContext.tsx (includes isDemoMode, enterDemo, exitDemo)
+│   │   ├── mocks/     handlers.ts (7 seed apps, blob PUT, upload simulation), browser.ts, server.ts
 │   │   └── types/     Shared TypeScript types
 │   └── public/staticwebapp.config.json  SWA routing + auth config
 ├── infra/             Bicep IaC (main.bicep + parameters.json)
@@ -94,6 +97,13 @@ A full-stack, single-user job application tracking SPA deployed on Azure (all fr
 8. **`blobUrl` never returned in GET responses** — Fetched on-demand via the download SAS endpoint to prevent stale URLs.
 
 9. **`processUpload` is idempotent** — Event Grid may retry. "Blob not found" on old blob deletion is treated as success. Magic-byte validation runs before any Cosmos write.
+
+10. **Demo mode is fully client-side** — MSW service worker intercepts every API call. No Azure traffic ever occurs in demo mode. Key sub-decisions:
+    - `VITE_API_URL` is absolute in production, so `getBaseUrl()` returns `""` in demo mode — relative paths that MSW can match.
+    - `getPrincipalHeader()` short-circuits in demo mode (no `/.auth/me` call).
+    - `main.tsx` restores the MSW worker before React renders on F5 refresh, using `isDemoMode()` (sessionStorage).
+    - The upload SAS handler writes `uploadedAt` immediately so the polling loop resolves on the first poll.
+    - MSW is dynamically imported in `demoMode.ts`, keeping it out of the production bundle.
 
 ---
 
@@ -223,3 +233,5 @@ cd api && npm run build
 | Bicep conventions | `.github/instructions/bicep.instructions.md` |
 | CI/CD secrets checklist | `docs/plans/cicd-secrets-checklist.md` |
 | Phase 5 deployment plan | `docs/plans/phase-5-cicd-deployment-plan.md` |
+| V2 demo mode feature brief | `docs/future-work/v2-public-demo-mode.md` |
+| V2 demo mode implementation plan | `docs/plans/v2-demo-mode-implementation-plan.md` |
