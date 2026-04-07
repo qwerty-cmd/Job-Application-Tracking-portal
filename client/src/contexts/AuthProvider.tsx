@@ -1,24 +1,9 @@
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-  type ReactNode,
-} from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { ClientPrincipal, AuthMeResponse } from "@/types";
 import { logger } from "@/lib/logger";
 import { invalidatePrincipalCache } from "@/lib/api";
-
-interface AuthContextValue {
-  user: ClientPrincipal | null;
-  isLoading: boolean;
-  isAuthenticated: boolean;
-  isOwner: boolean;
-  login: () => void;
-  logout: () => void;
-}
-
-const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+import { setDemoMode, startDemoWorker, stopDemoWorker } from "@/lib/demoMode";
+import { AuthContext } from "./AuthContext";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<ClientPrincipal | null>(null);
@@ -74,6 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const isAuthenticated = user !== null;
   const isOwner = user?.userRoles.includes("owner") ?? false;
+  const demoMode = user?.identityProvider === "demo";
 
   function login() {
     invalidatePrincipalCache();
@@ -85,19 +71,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.location.href = "/.auth/logout?post_logout_redirect_uri=/login";
   }
 
+  async function enterDemo(): Promise<void> {
+    await startDemoWorker();
+    setDemoMode(true);
+    invalidatePrincipalCache();
+    setUser({
+      identityProvider: "demo",
+      userId: "demo-user",
+      userDetails: "Demo Visitor",
+      userRoles: ["authenticated", "owner"],
+    });
+  }
+
+  function exitDemo(): void {
+    stopDemoWorker();
+    setDemoMode(false);
+    invalidatePrincipalCache();
+    window.location.href = "/login";
+  }
+
   return (
     <AuthContext.Provider
-      value={{ user, isLoading, isAuthenticated, isOwner, login, logout }}
+      value={{
+        user,
+        isLoading,
+        isAuthenticated,
+        isOwner,
+        isDemoMode: demoMode,
+        login,
+        logout,
+        enterDemo,
+        exitDemo,
+      }}
     >
       {children}
     </AuthContext.Provider>
   );
-}
-
-export function useAuth(): AuthContextValue {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
-  return context;
 }
