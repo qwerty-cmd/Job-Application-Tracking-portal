@@ -202,7 +202,7 @@ const app6: Application = {
   status: "Withdrawn",
   resume: null,
   coverLetter: null,
-  rejection: { reason: "Withdrew", notes: "Accepted a different offer" },
+  rejection: null,
   interviews: [],
   history: [
     { id: "evt-61", type: "application_created", timestamp: "2026-03-02T08:00:00Z", description: "Application created" },
