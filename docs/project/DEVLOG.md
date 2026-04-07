@@ -645,3 +645,36 @@ Each entry records what was done, on which machine, with which AI tool, and what
 - Dashboard shows explicit empty state message when `totalApplications === 0` instead of rendering empty charts
 
 **Blockers:** None — all phases complete. Project is showcase-ready.
+
+---
+
+## 2026-04-07 — Home (Claude Code)
+
+**What was done:**
+
+Implemented V2: Public Demo Mode — full client-side demo experience with MSW, no backend changes, no new Azure resources.
+
+- **`client/src/lib/demoMode.ts`** (new) — central module owning all demo state: `isDemoMode()` / `setDemoMode()` (sessionStorage), `startDemoWorker()` / `stopDemoWorker()` (MSW lifecycle with `workerStarted` guard to prevent double-start). Dynamic import keeps MSW out of the production bundle.
+- **`client/src/main.tsx`** — extended `enableMocking()` to restore the MSW worker on F5 refresh when `isDemoMode()` is true, so the demo survives page reloads.
+- **`client/src/contexts/AuthContext.tsx`** — added `isDemoMode: boolean`, `enterDemo(): Promise<void>`, and `exitDemo(): void` to `AuthContextValue`. `enterDemo` starts the worker, sets sessionStorage, invalidates the principal cache, and sets a demo user with the `owner` role directly in state. `exitDemo` stops the worker, clears sessionStorage, and does a full page reload to `/login` to reset all React state cleanly.
+- **`client/src/lib/api.ts`** — two changes: (1) `getPrincipalHeader()` returns `null` early in demo mode (no `/.auth/me` call needed); (2) `BASE_URL` converted from a `const` to a `getBaseUrl()` getter that returns `""` in demo mode so MSW intercepts relative paths instead of the absolute `VITE_API_URL`.
+- **`client/src/pages/LoginPage.tsx`** — added "Try the Demo" button (outline, below GitHub sign-in with an `or` divider) and "Try Demo instead" link on the Access Denied branch. Local `isDemoLoading` state shows spinner while the worker starts.
+- **`client/src/components/NavBar.tsx`** — when `isDemoMode` is true, shows an amber "DEMO MODE" badge and "Exit Demo" button in place of the username + Logout button.
+- **`client/src/mocks/handlers.ts`** — major seed data expansion: 7 varied applications (Contoso, Fabrikam, Northwind, Litware, Adventure Works, Tailspin Toys, Woodgrove Bank) covering all statuses, multiple interview rounds, and varied file states. Added: blob storage PUT handler returning 201; updated upload SAS handler to write `uploadedAt` immediately to the in-memory db so frontend polling resolves on the first poll.
+
+**New tests (11 added, 68 total, all passing):**
+- `client/src/lib/demoMode.test.ts` — 4 unit tests for `isDemoMode` / `setDemoMode`
+- `client/src/components/NavBar.test.tsx` — 5 tests: demo badge visible, Exit Demo button visible/functional, Logout hidden in demo mode
+- `client/src/pages/LoginPage.test.tsx` — 2 new tests: Try Demo button renders, `enterDemo` is called on click
+
+**Bug fixed:** `DashboardPage.test.tsx > displays Applications by Status chart` was relying on the default MSW stats handler whose date range (current month) no longer matched the March 2026 seed data. Added `useFixedStats()` to that test case — same fix pattern used by all other dashboard tests.
+
+**Decisions made:**
+
+- Demo mode is entirely client-side; zero backend changes
+- Dynamic import of MSW keeps it out of the production JS bundle (Vite code-splits it automatically)
+- `exitDemo` uses `window.location.href` (full reload) rather than React state reset — simpler and guarantees clean slate
+- `isDemoMode` derived from `user.identityProvider === "demo"` rather than a separate context boolean — single source of truth in the user object
+- Upload SAS handler writes `uploadedAt` immediately to simulate `processUpload`, so the existing 2-second polling loop works without modification
+
+**Test counts:** 266 API tests, 68 frontend tests — all passing.
