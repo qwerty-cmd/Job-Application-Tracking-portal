@@ -1,8 +1,22 @@
-import { useAuth } from "@/contexts/AuthContext";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 
 export function LoginPage() {
-  const { login, isLoading, isOwner, isAuthenticated } = useAuth();
+  const { login, isLoading, isOwner, isAuthenticated, enterDemo } = useAuth();
+  const navigate = useNavigate();
+  const [isDemoLoading, setIsDemoLoading] = useState(false);
+
+  async function handleTryDemo() {
+    setIsDemoLoading(true);
+    try {
+      await enterDemo();
+      navigate("/");
+    } finally {
+      setIsDemoLoading(false);
+    }
+  }
 
   if (isLoading) {
     return (
@@ -29,6 +43,13 @@ export function LoginPage() {
             This app is private. You don&apos;t have the required permissions.
           </p>
         </div>
+        <button
+          className="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
+          onClick={handleTryDemo}
+          disabled={isDemoLoading}
+        >
+          {isDemoLoading ? "Starting demo…" : "Try Demo instead"}
+        </button>
       </div>
     );
   }
@@ -44,9 +65,27 @@ export function LoginPage() {
           Private app &middot; Owner only
         </p>
       </div>
-      <Button size="lg" onClick={login}>
-        Sign in with GitHub
-      </Button>
+      <div className="flex flex-col items-center gap-3">
+        <Button size="lg" onClick={login}>
+          Sign in with GitHub
+        </Button>
+        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+          <span className="h-px w-16 bg-border" />
+          or
+          <span className="h-px w-16 bg-border" />
+        </div>
+        <Button
+          size="lg"
+          variant="outline"
+          onClick={handleTryDemo}
+          disabled={isDemoLoading}
+        >
+          {isDemoLoading ? "Starting demo…" : "Try the Demo"}
+        </Button>
+        <p className="text-xs text-muted-foreground">
+          Explore with sample data. No account needed.
+        </p>
+      </div>
     </div>
   );
 }

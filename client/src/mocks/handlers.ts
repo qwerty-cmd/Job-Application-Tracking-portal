@@ -42,6 +42,17 @@ export const mockApplication: Application = {
       outcome: "Passed",
       order: 1,
     },
+    {
+      id: "int-2",
+      round: 2,
+      type: "Technical",
+      date: "2026-03-28",
+      interviewers: "Bob Jones",
+      notes: "Live coding + system design",
+      reflection: "Need to practice more on system design",
+      outcome: "Pending",
+      order: 2,
+    },
   ],
   history: [
     {
@@ -75,11 +86,164 @@ export const mockApplication: Application = {
   updatedAt: "2026-03-25T16:00:00Z",
 };
 
+const app2: Application = {
+  id: "app-2",
+  company: "Fabrikam Corp",
+  role: "Platform Engineer",
+  location: { city: "Melbourne", country: "Australia", workMode: "Onsite", other: null },
+  dateApplied: "2026-03-05",
+  jobPostingUrl: "https://fabrikam.com/careers/42",
+  jobDescriptionText: "Platform Engineer role at Fabrikam...",
+  jobDescriptionFile: null,
+  status: "Accepted",
+  resume: { fileName: "fabrikam-resume.pdf", uploadedAt: "2026-03-05T09:00:00Z" },
+  coverLetter: null,
+  rejection: null,
+  interviews: [
+    { id: "int-21", round: 1, type: "Phone Screen", date: "2026-03-10", interviewers: "HR Team", notes: "", reflection: "", outcome: "Passed", order: 1 },
+    { id: "int-22", round: 2, type: "Technical", date: "2026-03-17", interviewers: "Engineering Lead", notes: "Kubernetes deep dive", reflection: "Strong performance", outcome: "Passed", order: 2 },
+    { id: "int-23", round: 3, type: "Panel", date: "2026-03-24", interviewers: "VP Engineering, CTO", notes: "Culture fit and leadership", reflection: "Great energy", outcome: "Passed", order: 3 },
+  ],
+  history: [
+    { id: "evt-21", type: "application_created", timestamp: "2026-03-05T09:00:00Z", description: "Application created" },
+    { id: "evt-22", type: "status_changed", timestamp: "2026-03-24T17:00:00Z", description: "Status changed to Accepted" },
+  ],
+  isDeleted: false,
+  deletedAt: null,
+  createdAt: "2026-03-05T09:00:00Z",
+  updatedAt: "2026-03-25T10:00:00Z",
+};
+
+const app3: Application = {
+  id: "app-3",
+  company: "Northwind Inc",
+  role: "DevOps Engineer",
+  location: { city: "Brisbane", country: "Australia", workMode: "Remote", other: null },
+  dateApplied: "2026-03-08",
+  jobPostingUrl: null,
+  jobDescriptionText: null,
+  jobDescriptionFile: { fileName: "northwind-jd.pdf", uploadedAt: "2026-03-08T11:00:00Z" },
+  status: "Rejected",
+  resume: { fileName: "northwind-resume.pdf", uploadedAt: "2026-03-08T11:00:00Z" },
+  coverLetter: null,
+  rejection: { reason: "Failed Technical", notes: "Did not pass the live coding round" },
+  interviews: [
+    { id: "int-31", round: 1, type: "Technical", date: "2026-03-14", interviewers: "Senior Dev", notes: "Algorithm challenge", reflection: "Struggled with the dynamic programming question", outcome: "Failed", order: 1 },
+  ],
+  history: [
+    { id: "evt-31", type: "application_created", timestamp: "2026-03-08T11:00:00Z", description: "Application created" },
+    { id: "evt-32", type: "status_changed", timestamp: "2026-03-14T16:00:00Z", description: "Status changed to Rejected" },
+  ],
+  isDeleted: false,
+  deletedAt: null,
+  createdAt: "2026-03-08T11:00:00Z",
+  updatedAt: "2026-03-14T16:00:00Z",
+};
+
+const app4: Application = {
+  id: "app-4",
+  company: "Litware Solutions",
+  role: "Site Reliability Engineer",
+  location: { city: "Perth", country: "Australia", workMode: "Hybrid", other: null },
+  dateApplied: "2026-03-18",
+  jobPostingUrl: "https://litware.io/jobs/sre",
+  jobDescriptionText: "SRE role — on-call rotation, incident response...",
+  jobDescriptionFile: null,
+  status: "Recruiter Screening",
+  resume: { fileName: "litware-resume.pdf", uploadedAt: "2026-03-18T14:00:00Z" },
+  coverLetter: null,
+  rejection: null,
+  interviews: [],
+  history: [
+    { id: "evt-41", type: "application_created", timestamp: "2026-03-18T14:00:00Z", description: "Application created" },
+    { id: "evt-42", type: "status_changed", timestamp: "2026-03-20T09:00:00Z", description: "Status changed to Recruiter Screening" },
+  ],
+  isDeleted: false,
+  deletedAt: null,
+  createdAt: "2026-03-18T14:00:00Z",
+  updatedAt: "2026-03-20T09:00:00Z",
+};
+
+const app5: Application = {
+  id: "app-5",
+  company: "Adventure Works",
+  role: "Cloud Architect",
+  location: { city: "Auckland", country: "New Zealand", workMode: "Hybrid", other: null },
+  dateApplied: "2026-03-22",
+  jobPostingUrl: "https://adventureworks.co.nz/careers",
+  jobDescriptionText: "Lead cloud architecture initiatives across Azure and multi-cloud environments. Define standards, mentor teams, and drive cloud-first adoption.",
+  jobDescriptionFile: null,
+  status: "Application Submitted",
+  resume: { fileName: "adventureworks-resume.pdf", uploadedAt: "2026-03-22T10:00:00Z" },
+  coverLetter: { fileName: "adventureworks-cl.pdf", uploadedAt: "2026-03-22T10:05:00Z" },
+  rejection: null,
+  interviews: [],
+  history: [
+    { id: "evt-51", type: "application_created", timestamp: "2026-03-22T10:00:00Z", description: "Application created" },
+    { id: "evt-52", type: "status_changed", timestamp: "2026-03-22T10:00:00Z", description: "Status changed to Application Submitted" },
+    { id: "evt-53", type: "file_uploaded", timestamp: "2026-03-22T10:00:00Z", description: "File uploaded: adventureworks-resume.pdf (resume)" },
+    { id: "evt-54", type: "file_uploaded", timestamp: "2026-03-22T10:05:00Z", description: "File uploaded: adventureworks-cl.pdf (coverLetter)" },
+  ],
+  isDeleted: false,
+  deletedAt: null,
+  createdAt: "2026-03-22T10:00:00Z",
+  updatedAt: "2026-03-22T10:05:00Z",
+};
+
+const app6: Application = {
+  id: "app-6",
+  company: "Tailspin Toys",
+  role: "Infrastructure Engineer",
+  location: { city: "Sydney", country: "Australia", workMode: "Remote", other: null },
+  dateApplied: "2026-03-02",
+  jobPostingUrl: null,
+  jobDescriptionText: null,
+  jobDescriptionFile: null,
+  status: "Withdrawn",
+  resume: null,
+  coverLetter: null,
+  rejection: { reason: "Withdrew", notes: "Accepted a different offer" },
+  interviews: [],
+  history: [
+    { id: "evt-61", type: "application_created", timestamp: "2026-03-02T08:00:00Z", description: "Application created" },
+    { id: "evt-62", type: "status_changed", timestamp: "2026-03-25T12:00:00Z", description: "Status changed to Withdrawn" },
+  ],
+  isDeleted: false,
+  deletedAt: null,
+  createdAt: "2026-03-02T08:00:00Z",
+  updatedAt: "2026-03-25T12:00:00Z",
+};
+
+const app7: Application = {
+  id: "app-7",
+  company: "Woodgrove Bank",
+  role: "Azure DevOps Engineer",
+  location: { city: "Sydney", country: "Australia", workMode: "Onsite", other: null },
+  dateApplied: "2026-03-28",
+  jobPostingUrl: "https://woodgrovebank.com/jobs/devops",
+  jobDescriptionText: "Azure DevOps Engineer for our financial services platform...",
+  jobDescriptionFile: null,
+  status: "Applying",
+  resume: null,
+  coverLetter: null,
+  rejection: null,
+  interviews: [],
+  history: [
+    { id: "evt-71", type: "application_created", timestamp: "2026-03-28T15:00:00Z", description: "Application created" },
+  ],
+  isDeleted: false,
+  deletedAt: null,
+  createdAt: "2026-03-28T15:00:00Z",
+  updatedAt: "2026-03-28T15:00:00Z",
+};
+
 // --- In-Memory Store (persists across requests within the browser session) ---
 
-let nextId = 2;
+let nextId = 8;
 const db: Map<string, Application> = new Map();
-db.set(mockApplication.id, structuredClone(mockApplication));
+for (const app of [mockApplication, app2, app3, app4, app5, app6, app7]) {
+  db.set(app.id, structuredClone(app));
+}
 
 function findApp(id: string): Application | undefined {
   const app = db.get(id as string);
@@ -441,13 +605,39 @@ export const handlers = [
     });
   }),
 
-  // Upload SAS token
-  http.post(`${API_BASE}/upload/sas-token`, () => {
+  // Upload SAS token — writes uploadedAt immediately so frontend polling succeeds
+  http.post(`${API_BASE}/upload/sas-token`, async ({ request }) => {
+    const body = (await request.json()) as Record<string, unknown>;
+    const applicationId = body.applicationId as string | undefined;
+    const fileType = body.fileType as string | undefined;
+    const fileName = (body.fileName as string | undefined) ?? "upload";
+    const container =
+      fileType === "resume"
+        ? "resumes"
+        : fileType === "coverLetter"
+          ? "coverletters"
+          : "jobdescriptions";
+    const timestamp = Date.now();
+    const blobPath = `${container}/${applicationId ?? "unknown"}/${timestamp}-${fileName}`;
+    const uploadUrl = `https://storage.blob.core.windows.net/${blobPath}?sig=mock`;
+
+    // Simulate processUpload — write file metadata so polling completes immediately
+    if (applicationId) {
+      const app = findApp(applicationId);
+      if (app) {
+        const fileMeta = { fileName, uploadedAt: new Date().toISOString() };
+        if (fileType === "resume") app.resume = fileMeta;
+        else if (fileType === "coverLetter") app.coverLetter = fileMeta;
+        else if (fileType === "jobDescriptionFile")
+          app.jobDescriptionFile = fileMeta;
+        app.updatedAt = fileMeta.uploadedAt;
+      }
+    }
+
     return HttpResponse.json({
       data: {
-        uploadUrl:
-          "https://storage.blob.core.windows.net/resumes/app-1/123-resume.pdf?sig=mock",
-        blobPath: "resumes/app-1/123-resume.pdf",
+        uploadUrl,
+        blobPath,
         expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
       },
       error: null,
@@ -465,6 +655,11 @@ export const handlers = [
       },
       error: null,
     });
+  }),
+
+  // Blob Storage direct PUT — simulate successful upload
+  http.put("https://storage.blob.core.windows.net/*", () => {
+    return new HttpResponse(null, { status: 201 });
   }),
 
   // SWA auth endpoint
