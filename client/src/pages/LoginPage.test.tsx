@@ -1,6 +1,7 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
+import userEvent from "@testing-library/user-event";
 import { server } from "@/mocks/server";
 import { renderWithProviders } from "@/test-utils";
 import App from "@/App";
@@ -111,5 +112,54 @@ describe("LoginPage", () => {
         screen.getByRole("button", { name: /sign in with github/i }),
       ).toBeInTheDocument();
     });
+  });
+
+  it('shows "Try the Demo" button for unauthenticated user', async () => {
+    server.use(
+      http.get("/.auth/me", () => {
+        return HttpResponse.json({ clientPrincipal: null });
+      }),
+    );
+
+    renderLoginPage();
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: /try the demo/i }),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("calls enterDemo and navigates to / when Try the Demo is clicked", async () => {
+    server.use(
+      http.get("/.auth/me", () => {
+        return HttpResponse.json({ clientPrincipal: null });
+      }),
+    );
+
+    const enterDemo = vi.fn().mockResolvedValue(undefined);
+
+    // Spy on useAuth to inject a mock enterDemo
+    const UseAuth = await import("@/hooks/useAuth");
+    vi.spyOn(UseAuth, "useAuth").mockReturnValue({
+      user: null,
+      isLoading: false,
+      isAuthenticated: false,
+      isOwner: false,
+      isDemoMode: false,
+      login: vi.fn(),
+      logout: vi.fn(),
+      enterDemo,
+      exitDemo: vi.fn(),
+    });
+
+    renderLoginPage();
+
+    const demoButton = await screen.findByRole("button", {
+      name: /try the demo/i,
+    });
+    await userEvent.click(demoButton);
+
+    expect(enterDemo).toHaveBeenCalledOnce();
   });
 });

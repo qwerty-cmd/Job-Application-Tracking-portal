@@ -104,6 +104,7 @@ describe("DashboardPage", () => {
   });
 
   it("displays Applications by Status chart", async () => {
+    useFixedStats();
     renderDashboard();
 
     await waitFor(() => {
