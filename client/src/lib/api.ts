@@ -1,7 +1,11 @@
 import type { ApiResponse } from "@/types";
 import { logger } from "@/lib/logger";
+import { isDemoMode } from "@/lib/demoMode";
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? "";
+function getBaseUrl(): string {
+  if (isDemoMode()) return ""; // relative paths so MSW intercepts
+  return import.meta.env.VITE_API_URL ?? "";
+}
 
 // When VITE_API_URL points to an external standalone Function App, SWA does not
 // automatically inject x-ms-client-principal. We read it from /.auth/me and
@@ -9,6 +13,7 @@ const BASE_URL = import.meta.env.VITE_API_URL ?? "";
 let _cachedPrincipalHeader: string | null | undefined = undefined;
 
 async function getPrincipalHeader(): Promise<string | null> {
+  if (isDemoMode()) return null; // MSW handles auth; no header needed
   if (_cachedPrincipalHeader !== undefined) return _cachedPrincipalHeader;
   try {
     const res = await fetch("/.auth/me", { credentials: "include" });
@@ -27,7 +32,7 @@ export function invalidatePrincipalCache(): void {
 }
 
 function buildUrl(path: string, params?: Record<string, string>): string {
-  const url = `${BASE_URL}${path}`;
+  const url = `${getBaseUrl()}${path}`;
   if (!params) return url;
 
   const searchParams = new URLSearchParams();
