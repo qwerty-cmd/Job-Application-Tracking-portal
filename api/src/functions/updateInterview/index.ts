@@ -6,7 +6,7 @@ import {
 } from "@azure/functions";
 import { requireOwner } from "../../shared/auth.js";
 import { createLogger, serializeError } from "../../shared/logger.js";
-import { trackMetric } from "../../shared/telemetry.js";
+import { trackEvent, trackMetric } from "../../shared/telemetry.js";
 import { getContainer } from "../../shared/cosmosClient.js";
 import {
   successResponse,
@@ -134,6 +134,13 @@ async function updateInterview(
       jobDescriptionFile: stripBlobUrl(saved!.jobDescriptionFile),
     };
 
+    trackEvent("InterviewUpdated", { applicationId: id, interviewId });
+    log.info("Request completed", {
+      status: 200,
+      durationMs: Date.now() - startedAt,
+      applicationId: id,
+      interviewId,
+    });
     return successResponse(application);
   } catch (err) {
     log.error("Unhandled error", {
