@@ -16,13 +16,18 @@ export function initTelemetry(): void {
     return;
   }
 
+  // The Functions host already auto-collects requests, dependencies,
+  // exceptions, performance, and console logs via its own App Insights
+  // pipeline. Enabling those here causes conflicts and breaks the host's
+  // request tracking (visible in Performance/Failures tabs).
+  // Only initialize the SDK for manual trackEvent/trackMetric calls.
   appInsights
     .setup(process.env.APPLICATIONINSIGHTS_CONNECTION_STRING)
-    .setAutoCollectRequests(true)
-    .setAutoCollectPerformance(true, false)
-    .setAutoCollectExceptions(true)
-    .setAutoCollectDependencies(true)
-    .setAutoCollectConsole(true, true)
+    .setAutoCollectRequests(false)
+    .setAutoCollectPerformance(false, false)
+    .setAutoCollectExceptions(false)
+    .setAutoCollectDependencies(false)
+    .setAutoCollectConsole(false, false)
     .setUseDiskRetryCaching(true)
     .start();
 
@@ -42,9 +47,11 @@ export function trackEvent(
         )
       : undefined,
   });
+  appInsights.defaultClient.flush();
 }
 
 export function trackMetric(name: string, value: number): void {
   if (!enabled) return;
   appInsights.defaultClient.trackMetric({ name, value });
+  appInsights.defaultClient.flush();
 }
