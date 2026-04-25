@@ -303,6 +303,114 @@ describe("ApplicationDetailPage", () => {
     expect(screen.getByLabelText(/notes/i)).toBeInTheDocument();
   });
 
+  // --- Rejection reason dialog (status change to Rejected) ---
+
+  it("opens rejection reason dialog when selecting Rejected status", async () => {
+    const user = userEvent.setup();
+    renderDetailPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Contoso Ltd")).toBeInTheDocument();
+    });
+
+    // Open the status dropdown
+    const statusTrigger = screen.getByRole("combobox", { name: /status/i });
+    await user.click(statusTrigger);
+
+    // Select "Rejected"
+    const rejectedOption = await screen.findByRole("option", { name: "Rejected" });
+    await user.click(rejectedOption);
+
+    // Dialog should appear asking for rejection reason
+    await waitFor(() => {
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+    });
+    expect(screen.getByText(/mark as rejected/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/reason/i)).toBeInTheDocument();
+  });
+
+  it("closes rejection dialog on cancel without saving", async () => {
+    const user = userEvent.setup();
+    renderDetailPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Contoso Ltd")).toBeInTheDocument();
+    });
+
+    const statusTrigger = screen.getByRole("combobox", { name: /status/i });
+    await user.click(statusTrigger);
+    const rejectedOption = await screen.findByRole("option", { name: "Rejected" });
+    await user.click(rejectedOption);
+
+    await waitFor(() => {
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: /cancel/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+  });
+
+  it("confirm button is disabled until a reason is selected", async () => {
+    const user = userEvent.setup();
+    renderDetailPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Contoso Ltd")).toBeInTheDocument();
+    });
+
+    const statusTrigger = screen.getByRole("combobox", { name: /status/i });
+    await user.click(statusTrigger);
+    const rejectedOption = await screen.findByRole("option", { name: "Rejected" });
+    await user.click(rejectedOption);
+
+    await waitFor(() => {
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+    });
+
+    expect(
+      screen.getByRole("button", { name: /confirm rejection/i }),
+    ).toBeDisabled();
+  });
+
+  it("sends status and rejection together when confirming rejection", async () => {
+    const user = userEvent.setup();
+    let patchBody: unknown;
+    server.use(
+      http.patch("/api/applications/:id", async ({ request }) => {
+        patchBody = await request.json();
+        return HttpResponse.json({
+          data: { ...mockApplication, status: "Rejected" },
+          error: null,
+        });
+      }),
+    );
+
+    renderDetailPage();
+    await waitFor(() => expect(screen.getByText("Contoso Ltd")).toBeInTheDocument());
+
+    const statusTrigger = screen.getByRole("combobox", { name: /status/i });
+    await user.click(statusTrigger);
+    await user.click(await screen.findByRole("option", { name: "Rejected" }));
+
+    await waitFor(() => expect(screen.getByRole("dialog")).toBeInTheDocument());
+
+    // Pick a reason from the dialog's combobox
+    const reasonTrigger = screen.getByRole("combobox", { name: /reason/i });
+    await user.click(reasonTrigger);
+    await user.click(await screen.findByRole("option", { name: "Ghosted" }));
+
+    await user.click(screen.getByRole("button", { name: /confirm rejection/i }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(patchBody).toMatchObject({
+      status: "Rejected",
+      rejection: { reason: "Ghosted" },
+    });
+  });
+
   // --- Activity Log tests ---
 
   it("displays activity log section with history events", async () => {
