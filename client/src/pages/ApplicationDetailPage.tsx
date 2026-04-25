@@ -9,6 +9,7 @@ import { RejectionSection } from "@/components/RejectionSection";
 import { FileSection } from "@/components/FileSection";
 import { InterviewList } from "@/components/InterviewList";
 import { InterviewModal } from "@/components/InterviewModal";
+import { RejectionReasonDialog } from "@/components/RejectionReasonDialog";
 import { ActivityLog } from "@/components/ActivityLog";
 import { useApplication } from "@/hooks/useApplication";
 import {
@@ -49,6 +50,9 @@ export function ApplicationDetailPage() {
   const { download } = useDownloadFile();
   const { deleteFile } = useDeleteFile();
 
+  // Rejection reason dialog state
+  const [rejectionDialogOpen, setRejectionDialogOpen] = useState(false);
+
   // Interview modal state
   const [interviewModalOpen, setInterviewModalOpen] = useState(false);
   const [editingInterview, setEditingInterview] = useState<
@@ -67,9 +71,35 @@ export function ApplicationDetailPage() {
 
   const handleStatusChange = async (status: ApplicationStatus) => {
     if (!application) return;
+    // The API requires rejection.reason in the same PATCH body when status is
+    // "Rejected", so we intercept here and collect it via a dialog first.
+    if (status === "Rejected") {
+      setRejectionDialogOpen(true);
+      return;
+    }
     const res = await update(application.id, { status });
     if (res.data) {
       toast.success(`Status updated to ${status}`);
+      refetch();
+    } else {
+      toast.error(formatApiError(res.error, "Failed to update status"));
+    }
+  };
+
+  const handleRejectionConfirm = async (rejection: {
+    reason: RejectionReason;
+    notes: string;
+  }) => {
+    if (!application) return;
+    // Send status and rejection together — the API validates that reason is
+    // present whenever status is "Rejected" and rejects partial updates.
+    const res = await update(application.id, {
+      status: "Rejected",
+      rejection,
+    });
+    if (res.data) {
+      toast.success("Status updated to Rejected");
+      setRejectionDialogOpen(false);
       refetch();
     } else {
       toast.error(formatApiError(res.error, "Failed to update status"));
@@ -293,6 +323,13 @@ export function ApplicationDetailPage() {
         onSubmit={handleInterviewSubmit}
         isLoading={editingInterview ? isUpdatingInterview : isAddingInterview}
         interview={editingInterview}
+      />
+
+      <RejectionReasonDialog
+        open={rejectionDialogOpen}
+        onOpenChange={setRejectionDialogOpen}
+        onConfirm={handleRejectionConfirm}
+        isLoading={isUpdating}
       />
     </div>
   );
