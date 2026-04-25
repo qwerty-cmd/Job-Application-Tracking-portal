@@ -375,6 +375,42 @@ describe("ApplicationDetailPage", () => {
     ).toBeDisabled();
   });
 
+  it("sends status and rejection together when confirming rejection", async () => {
+    const user = userEvent.setup();
+    let patchBody: unknown;
+    server.use(
+      http.patch("/api/applications/:id", async ({ request }) => {
+        patchBody = await request.json();
+        return HttpResponse.json({
+          data: { ...mockApplication, status: "Rejected" },
+          error: null,
+        });
+      }),
+    );
+
+    renderDetailPage();
+    await waitFor(() => expect(screen.getByText("Contoso Ltd")).toBeInTheDocument());
+
+    const statusTrigger = screen.getByRole("combobox", { name: /status/i });
+    await user.click(statusTrigger);
+    await user.click(await screen.findByRole("option", { name: "Rejected" }));
+
+    await waitFor(() => expect(screen.getByRole("dialog")).toBeInTheDocument());
+
+    // Pick a reason from the dialog's combobox
+    const reasonTrigger = screen.getByRole("combobox", { name: /reason/i });
+    await user.click(reasonTrigger);
+    await user.click(await screen.findByRole("option", { name: "Ghosted" }));
+
+    await user.click(screen.getByRole("button", { name: /confirm rejection/i }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(patchBody).toMatchObject({
+      status: "Rejected",
+      rejection: { reason: "Ghosted" },
+    });
+  });
+
   // --- Activity Log tests ---
 
   it("displays activity log section with history events", async () => {

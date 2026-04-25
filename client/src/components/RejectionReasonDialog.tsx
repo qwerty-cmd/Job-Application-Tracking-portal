@@ -51,8 +51,8 @@ export function RejectionReasonDialog({
   async function handleConfirm() {
     if (!reason) return;
     await onConfirm({ reason, notes });
-    setReason("");
-    setNotes("");
+    // State resets via handleClose when the dialog closes on success.
+    // On failure the parent leaves the dialog open, preserving the user's input.
   }
 
   return (
