@@ -91,7 +91,7 @@ export function DetailHeader({
             }}
             disabled={isUpdating}
           >
-            <SelectTrigger className="w-[200px]">
+            <SelectTrigger className="w-[200px]" aria-label="Status">
               <SelectValue>
                 <StatusBadge status={application.status} />
               </SelectValue>
