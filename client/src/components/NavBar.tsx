@@ -21,7 +21,7 @@ export function NavBar() {
             Job Tracker
           </span>
           <Separator orientation="vertical" className="h-6" />
-          <nav className="flex items-center gap-1">
+          <nav className="hidden md:flex items-center gap-1">
             {navItems.map(({ to, label }) => (
               <NavLink
                 key={to}

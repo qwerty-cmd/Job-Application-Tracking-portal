@@ -1,14 +1,7 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogDescription,
-} from "@/components/ui/dialog";
+import { DrawerDialog } from "@/components/DrawerDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -95,23 +88,20 @@ export function InterviewModal({
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>
-            {isEditing ? "Edit Interview" : "Add Interview Round"}
-          </DialogTitle>
-          <DialogDescription>
-            {isEditing
-              ? `Editing Round ${interview.round} (${interview.type})`
-              : "Add a new interview round to this application."}
-          </DialogDescription>
-        </DialogHeader>
-
-        <form
-          onSubmit={form.handleSubmit(handleFormSubmit)}
-          className="flex flex-col gap-4"
-        >
+    <DrawerDialog
+      open={open}
+      onOpenChange={handleClose}
+      title={isEditing ? "Edit Interview" : "Add Interview Round"}
+      description={
+        isEditing
+          ? `Editing Round ${interview.round} (${interview.type})`
+          : "Add a new interview round to this application."
+      }
+    >
+      <form
+        onSubmit={form.handleSubmit(handleFormSubmit)}
+        className="flex flex-col gap-4 px-4 pb-4 overflow-y-auto max-h-[70vh]"
+      >
           {/* Type */}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="interview-type">
@@ -228,7 +218,7 @@ export function InterviewModal({
             </p>
           </div>
 
-          <DialogFooter>
+          <div className="flex gap-2 justify-end">
             <Button
               type="button"
               variant="outline"
@@ -244,9 +234,8 @@ export function InterviewModal({
                   ? "Save Changes"
                   : "Add Interview"}
             </Button>
-          </DialogFooter>
+          </div>
         </form>
-      </DialogContent>
-    </Dialog>
+    </DrawerDialog>
   );
 }
