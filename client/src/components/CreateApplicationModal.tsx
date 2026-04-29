@@ -1,14 +1,7 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogDescription,
-} from "@/components/ui/dialog";
+import { DrawerDialog } from "@/components/DrawerDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -127,19 +120,16 @@ export function CreateApplicationModal({
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>New Application</DialogTitle>
-          <DialogDescription>
-            Create a new job application. Files can be uploaded after creation.
-          </DialogDescription>
-        </DialogHeader>
-
-        <form
-          onSubmit={form.handleSubmit(handleFormSubmit)}
-          className="flex flex-col gap-4"
-        >
+    <DrawerDialog
+      open={open}
+      onOpenChange={handleClose}
+      title="New Application"
+      description="Create a new job application. Files can be uploaded after creation."
+    >
+      <form
+        onSubmit={form.handleSubmit(handleFormSubmit)}
+        className="flex flex-col gap-4 px-4 pb-4 overflow-y-auto max-h-[70vh]"
+      >
           {/* Company */}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="company">
@@ -289,7 +279,7 @@ export function CreateApplicationModal({
             </p>
           </fieldset>
 
-          <DialogFooter>
+          <div className="flex gap-2 justify-end">
             <Button
               type="button"
               variant="outline"
@@ -301,9 +291,8 @@ export function CreateApplicationModal({
             <Button type="submit" disabled={isLoading}>
               {isLoading ? "Creating..." : "Create Application"}
             </Button>
-          </DialogFooter>
+          </div>
         </form>
-      </DialogContent>
-    </Dialog>
+    </DrawerDialog>
   );
 }

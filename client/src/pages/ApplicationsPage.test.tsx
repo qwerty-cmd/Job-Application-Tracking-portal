@@ -48,9 +48,9 @@ describe("ApplicationsPage", () => {
     renderApp();
 
     await waitFor(() => {
-      expect(screen.getByText("Contoso Ltd")).toBeInTheDocument();
+      expect(screen.getAllByText("Contoso Ltd")[0]).toBeInTheDocument();
     });
-    expect(screen.getByText("Senior Cloud Engineer")).toBeInTheDocument();
+    expect(screen.getAllByText("Senior Cloud Engineer")[0]).toBeInTheDocument();
   });
 
   it("shows the + New Application button", async () => {
@@ -106,7 +106,7 @@ describe("ApplicationsPage", () => {
     renderApp();
 
     await waitFor(() => {
-      expect(screen.getByText("Contoso Ltd")).toBeInTheDocument();
+      expect(screen.getAllByText("Contoso Ltd")[0]).toBeInTheDocument();
     });
 
     // Filter bar labels
@@ -121,7 +121,7 @@ describe("ApplicationsPage", () => {
     renderApp();
 
     await waitFor(() => {
-      expect(screen.getByText("Contoso Ltd")).toBeInTheDocument();
+      expect(screen.getAllByText("Contoso Ltd")[0]).toBeInTheDocument();
     });
 
     const fromInput = screen.getByLabelText(/from/i);
@@ -136,7 +136,7 @@ describe("ApplicationsPage", () => {
 
     // After applying, the table should still render (filters applied)
     await waitFor(() => {
-      expect(screen.getByText("Contoso Ltd")).toBeInTheDocument();
+      expect(screen.getAllByText("Contoso Ltd")[0]).toBeInTheDocument();
     });
   });
 
@@ -145,7 +145,7 @@ describe("ApplicationsPage", () => {
     renderApp();
 
     await waitFor(() => {
-      expect(screen.getByText("Contoso Ltd")).toBeInTheDocument();
+      expect(screen.getAllByText("Contoso Ltd")[0]).toBeInTheDocument();
     });
 
     // Set a date filter first
