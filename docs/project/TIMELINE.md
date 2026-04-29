@@ -228,7 +228,9 @@ Detailed execution plan: `docs/plans/phase-5-cicd-deployment-plan.md`
 | **4 — Frontend**               | 13–15          | Week 2–4                   |
 | **5 — CI/CD & Deploy**         | 3–4            | Week 4                     |
 | **6 — Polish & Showcase**      | 5.5–6.5        | Week 4–5                   |
-| **Total**                      | **~53–61 hrs** | **~4–5 weeks**             |
+| **V2 — Public Demo Mode**      | ~8             | Post-launch                |
+| **V3 — PWA Mobile**            | ~14–19         | Post-V2                    |
+| **Total**                      | **~70–83 hrs** | **~6–7 weeks**             |
 
 > **If working full-time (~40 hrs/week): ~1.5–2 weeks**
 
@@ -305,3 +307,31 @@ Phase 0 (Design)
 | **M4** — Frontend connected  | Full working app — add applications, upload files, track outcomes |
 | **M5** — Live on Azure       | CI/CD from GitHub, auto-deploys, live public URL                  |
 | **M6** — Showcase-ready      | Auth-protected, polished UI, documented, reproducible infra — ✅ Complete |
+| **M7** — Public demo         | Client-side demo mode (MSW), no auth required — ✅ Complete       |
+| **M8** — PWA mobile          | Installable PWA, mobile-responsive UI, bottom nav, drawer modals  |
+
+---
+
+## V3: PWA Mobile
+
+**Effort: ~14–19 hrs | Branch: `feature/pwa-mobile`**
+
+Full implementation plan: `docs/plans/v3-pwa-mobile-implementation-plan.md`
+
+| Task | Effort | Notes |
+|------|--------|-------|
+| PWA plumbing (`vite-plugin-pwa`, manifest, icons, iOS meta tags) | 2–3 hrs | `vite.config.ts`, `index.html`, 2 PNG icons in `public/` |
+| `useIsMobile` hook | 0.5 hrs | `matchMedia` listener, reactive boolean |
+| `BottomNav` component + `NavBar` mobile update + `App.tsx` wiring | 2.5–3 hrs | Fixed bottom tab bar, hide header nav links on mobile |
+| `ApplicationCard` component | 1–1.5 hrs | Tappable card for mobile list view |
+| `ApplicationsTable` mobile view | 1–1.5 hrs | Wrap table in `hidden md:block`, add card list in `block md:hidden` |
+| Shadcn `Drawer` UI component (`vaul`) | 0.5 hrs | Scaffold from shadcn docs |
+| `DrawerDialog` responsive wrapper | 1–1.5 hrs | `useIsMobile` → `<Drawer>` or `<Dialog>` |
+| `CreateApplicationModal` + `InterviewModal` updates | 1 hr | Swap `<Dialog>` for `<DrawerDialog>` |
+| Tests (5 new test files, 27 new tests) | 3–4 hrs | TDD: write tests first |
+
+**Definition of done:**
+- Lighthouse PWA audit passes (installable)
+- 95+ tests passing, 0 TypeScript errors
+- No regressions on existing 68 tests
+- Renders correctly on 390px viewport

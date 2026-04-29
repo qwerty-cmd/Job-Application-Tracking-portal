@@ -21,6 +21,7 @@ Auth:      Azure SWA built-in (GitHub provider)
   - `.github/workflows/azure-functions.yml`
 - CI/CD secrets/setup: `docs/plans/cicd-secrets-checklist.md`
 - Phase 5 plan: `docs/plans/phase-5-cicd-deployment-plan.md`
+- V3 PWA plan: `docs/plans/v3-pwa-mobile-implementation-plan.md`
 - Docs index: `docs/README.md`
 
 ## Current Status
@@ -32,8 +33,10 @@ Auth:      Azure SWA built-in (GitHub provider)
 - [x] Phase 4: Frontend (React) — **complete (dashboard, interview pipeline/dropoff analytics, accessibility/test fixes)**
 - [x] Phase 5: CI/CD & Deployment — **complete (both workflows deployed, smoke tests passed, route conflict fixed)**
 - [x] Phase 6: Polish & Showcase-Ready — **complete (security review, activity log, dashboard empty state, portfolio README, 57 frontend tests)**
+- [x] V2: Public Demo Mode — **complete (MSW client-side demo, 68 frontend tests)**
+- [ ] V3: PWA Mobile — **in planning — branch `feature/pwa-mobile`, plan at `docs/plans/v3-pwa-mobile-implementation-plan.md`**
 
-**All phases complete.** Project is fully deployed and showcase-ready.
+**Currently working on:** V3 PWA Mobile — plan written, implementation not started.
 
 ## Design Steps Tracker
 
@@ -943,6 +946,8 @@ job-tracker/
 - 2026-03-22: Phase 4 marked complete and Phase 5 kicked off. Added detailed CI/CD plan at `docs/plans/phase-5-cicd-deployment-plan.md` and aligned deployment/status references across docs.
 - 2026-03-24: Phase 5 complete — both CI/CD workflows deployed, smoke tests passed, route conflict fixed (`{id:guid}` constraint).
 - 2026-03-24: Phase 6 complete — security review (all 16 Functions, SAS tokens, CORS, processUpload validated), activity log timeline (history field on all mutation endpoints + ActivityLog component), dashboard empty state for zero applications, portfolio-ready README with architecture diagram, 57 frontend tests (up from 35). Created `docs/reviews/phase-6-security-review.md` and `docs/plans/phase-6-polish-plan.md`.
+- 2026-04-07: V2 Public Demo Mode complete — MSW client-side demo, no backend changes, 68 frontend tests (up from 57). `demoMode.ts`, `AuthContext` `enterDemo`/`exitDemo`, `api.ts` demo short-circuits, "Try the Demo" on LoginPage, NavBar DEMO MODE badge, 7 seed applications.
+- 2026-04-29: V3 PWA Mobile planning complete — assessed PWA vs React Native vs Capacitor, chose PWA. Created `feature/pwa-mobile` branch off latest `main`. Wrote full implementation plan (`docs/plans/v3-pwa-mobile-implementation-plan.md`): 14 files, 27 new tests, 8 steps covering `vite-plugin-pwa`, `useIsMobile`, `BottomNav`, `ApplicationCard`, mobile card list in `ApplicationsTable`, shadcn `Drawer`, `DrawerDialog` wrapper, modal updates. Updated `TIMELINE.md` and `DEVLOG.md`.
 
 ---
 
