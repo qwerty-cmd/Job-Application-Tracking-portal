@@ -678,3 +678,31 @@ Implemented V2: Public Demo Mode — full client-side demo experience with MSW, 
 - Upload SAS handler writes `uploadedAt` immediately to simulate `processUpload`, so the existing 2-second polling loop works without modification
 
 **Test counts:** 266 API tests, 68 frontend tests — all passing.
+
+---
+
+## 2026-04-29 — Home (Claude Code)
+
+**What was done:**
+
+- Assessed effort for a mobile app version of the web app — evaluated PWA, React Native, and Capacitor options
+- Decided on PWA (Option 1) as the right path: frontend-only, no App Store friction, existing tech stack fully reusable
+- Created feature branch `feature/pwa-mobile` off latest `main`
+- Wrote full V3 implementation plan covering all 8 steps, 14 files, and 27 new tests
+- Saved plan to `docs/plans/v3-pwa-mobile-implementation-plan.md`
+- Updated `docs/project/TIMELINE.md` — added V3 phase to summary table, appended detailed V3 task breakdown and milestones
+- Updated `docs/project/CLAUDE.md` — added V3 to current status and recent work
+
+**Decisions made:**
+
+- PWA over React Native/Capacitor — single-user portfolio app, no public user base, no App Store needed; all backend, hooks, types, API layer, demo mode reused untouched
+- `vite-plugin-pwa` (Workbox) for manifest + service worker generation — no manual SW authoring
+- `vaul` (via shadcn Drawer) for bottom-sheet drawers on mobile — same library already used by shadcn ecosystem
+- `useIsMobile` hook using `matchMedia` (not CSS-only) — needed to conditionally render Drawer vs Dialog in React
+- Bottom tab bar (`BottomNav`) rather than hamburger menu — more mobile-native, no extra interaction to reveal nav
+- Card list in `ApplicationsTable` (CSS `hidden md:block` / `block md:hidden`) — avoids a separate mobile page/route, same data, same props
+- `DrawerDialog` wrapper extracts the responsive switch so modal forms (`CreateApplicationModal`, `InterviewModal`) need only a one-line import change; all form logic is untouched
+
+**Blockers:** None — planning complete, ready to implement.
+
+**Next session:** Implement V3 PWA mobile — follow step order in `docs/plans/v3-pwa-mobile-implementation-plan.md`. TDD: write tests first for each step.
