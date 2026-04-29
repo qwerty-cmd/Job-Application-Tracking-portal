@@ -39,8 +39,9 @@ describe("App", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Job Tracker")).toBeInTheDocument();
-      expect(screen.getByText("Dashboard")).toBeInTheDocument();
-      expect(screen.getByText("Trash")).toBeInTheDocument();
+      // Dashboard and Trash appear in both NavBar and BottomNav
+      expect(screen.getAllByText("Dashboard").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("Trash").length).toBeGreaterThan(0);
       expect(
         screen.getByRole("button", { name: /logout/i }),
       ).toBeInTheDocument();

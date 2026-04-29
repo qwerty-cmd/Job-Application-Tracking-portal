@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { NavBar } from "@/components/NavBar";
+import { BottomNav } from "@/components/BottomNav";
 import { LoginPage } from "@/pages/LoginPage";
 import { ApplicationsPage } from "@/pages/ApplicationsPage";
 import { ApplicationDetailPage } from "@/pages/ApplicationDetailPage";
@@ -15,7 +16,8 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <NavBar />
-      <main>{children}</main>
+      <main className="pb-16 md:pb-0">{children}</main>
+      <BottomNav />
     </div>
   );
 }

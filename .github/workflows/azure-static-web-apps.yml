@@ -7,6 +7,7 @@ on:
     pull_request:
         branches:
             - main
+        types: [opened, synchronize, reopened, closed]
     workflow_dispatch:
 
 concurrency:
@@ -15,10 +16,12 @@ concurrency:
 
 permissions:
     contents: read
+    pull-requests: write
 
 jobs:
     quality-gates:
         name: Quality Gates (Client)
+        if: github.event_name != 'pull_request' || github.event.action != 'closed'
         runs-on: ubuntu-latest
         defaults:
             run:
@@ -56,7 +59,9 @@ jobs:
 
     deploy:
         name: Deploy to Azure Static Web Apps
-        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        if: |
+            github.event_name == 'pull_request' && github.event.action != 'closed' ||
+            github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         runs-on: ubuntu-latest
         needs: quality-gates
 
@@ -67,7 +72,7 @@ jobs:
                   name: client-dist
                   path: dist
 
-            - name: Deploy prebuilt app
+            - name: Deploy to Azure Static Web Apps
               uses: Azure/static-web-apps-deploy@v1
               with:
                   azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
@@ -76,3 +81,16 @@ jobs:
                   app_location: dist
                   output_location: ""
                   skip_app_build: true
+
+    close_preview:
+        name: Close PR Preview Environment
+        if: github.event_name == 'pull_request' && github.event.action == 'closed'
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Close preview environment
+              uses: Azure/static-web-apps-deploy@v1
+              with:
+                  azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+                  repo_token: ${{ secrets.GITHUB_TOKEN }}
+                  action: close

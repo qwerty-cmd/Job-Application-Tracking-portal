@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import { ApplicationCard } from "@/components/ApplicationCard";
 import {
   useReactTable,
   getCoreRowModel,
@@ -174,6 +175,27 @@ export function ApplicationsTable({
 
   return (
     <div>
+      {/* Mobile: card list */}
+      <div className="block md:hidden space-y-2">
+        {items.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 py-12">
+            <p className="font-medium text-muted-foreground">No applications yet</p>
+            <p className="text-sm text-muted-foreground">
+              Start tracking your job search by adding your first application.
+            </p>
+            {onCreateClick && (
+              <Button size="sm" className="mt-2" onClick={onCreateClick}>
+                + New Application
+              </Button>
+            )}
+          </div>
+        ) : (
+          items.map((item) => <ApplicationCard key={item.id} item={item} />)
+        )}
+      </div>
+
+      {/* Desktop: table */}
+      <div className="hidden md:block">
       <Table>
         <TableHeader>
           {table.getHeaderGroups().map((headerGroup) => (
@@ -265,6 +287,8 @@ export function ApplicationsTable({
           )}
         </TableBody>
       </Table>
+
+      </div>{/* end desktop table wrapper */}
 
       {/* Pagination */}
       {pagination && pagination.totalPages > 1 && (
