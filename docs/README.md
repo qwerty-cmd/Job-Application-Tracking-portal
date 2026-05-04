@@ -17,6 +17,7 @@ This folder contains all project documentation.
   - `phase-5-cicd-deployment-plan.md` - CI/CD execution checklist
   - `phase-6-polish-plan.md` - Phase 6 polish & showcase plan
   - `logging-improvement-plan.md` - logging improvements and rationale
+  - `v3-ai-insights-design.md` - free-first AI insights design (rules engine first, optional LLM later)
 - `reviews/`
   - `phase-2-code-review.md` - security audit and fixes for backend API
   - `phase-3-deployment-challenges.md` - Function App deployment issues and resolutions
