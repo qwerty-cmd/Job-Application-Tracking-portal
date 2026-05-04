@@ -12,6 +12,12 @@ export default defineConfig({
     VitePWA({
       registerType: "autoUpdate",
       includeAssets: ["favicon.svg", "icon-192.png", "icon-512.png"],
+      workbox: {
+        // Do not let the SW hijack auth or API navigations. Without this,
+        // the GitHub OAuth redirect (/.auth/login/github and its callback)
+        // is served the cached index.html and sign-in appears stuck.
+        navigateFallbackDenylist: [/^\/\.auth\//, /^\/api\//],
+      },
       manifest: {
         name: "Job Tracker",
         short_name: "JobTracker",
